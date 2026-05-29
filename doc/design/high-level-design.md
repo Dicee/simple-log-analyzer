@@ -57,8 +57,9 @@ Indices are used only to distinguish requirements of the same group/depth within
 
 ## High-level architecture
 
-In this section, we'll discuss the planned architecture at a high-level. We will not delve in full details for each component, but instead will limit ourselves to the broad structure, the role and interaction of each component.
+### Overview
 
+In this section, we'll discuss the planned architecture at a high-level. We will not delve in full details for each component, but instead will limit ourselves to the broad structure, the role and interaction of each component.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryBorderColor': '#cccccc'}}}%%
@@ -126,3 +127,13 @@ flowchart TD
     %% UI + AI — split: coral for UI, amber for LLM
     style UI  fill:#F0997B,stroke:#993C1D,color:#4A1B0C
 ````
+### Ingestion layer
+
+At a high-level, ingestion will require introducing the following components, concepts and abstractions:
+- a PUT API a user can leverage to send data to the service
+- a log agent (side-car process) collecting logs on disk, integrating with the PUT API and handling batching, retries and log rotation
+- a data model for `LogEvent` Basically, it will be some metadata (including indexable fields) along with the raw data.
+- a concept of `Parser`, converting a given input data type into a `LogEvent`
+- a concept of `Enricher` or `FieldExtractor`, allowing to plug extra parsing behaviour to add more indexable fields than the default parser supports
+
+This is discussed in more depth in [ADR2](adr2-initial-ingestion-layer.md). It covers requirements R00, R01 and R03-05.
