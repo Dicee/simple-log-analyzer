@@ -3,10 +3,20 @@ claude-initial-design.png
 log-intelligence-design-summary.md
 Initial notes and plan.md
 
-# Used for complex arcgitecture reviews by Claude, to keep the context in an external file and be able to restart a new session with relevant context
+# Used for complex architecture reviews by Claude, to keep the context in an external file and be able to restart a new session with relevant context
 doc/design/reviews
 
 # I use Obsidian to manage the documentation within this repo
 .obsidian
 
 .idea
+
+# Gradle
+.gradle
+build/
+
+# Node / Angular / Electron
+node_modules
+desktop-app/dist
+desktop-app/dist-electron
+desktop-app/out-tsc

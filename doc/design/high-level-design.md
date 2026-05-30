@@ -137,3 +137,20 @@ At a high-level, ingestion will require introducing the following components, co
 - a concept of `Enricher` or `FieldExtractor`, allowing to plug extra parsing behaviour to add more indexable fields than the default parser supports
 
 This is discussed in more depth in [ADR2](adr2-initial-ingestion-layer.md). It covers requirements R00, R01 and R03-05.
+
+## Technical stack
+
+In this section, we will go through the tech stack and the organization of the build. It is important to note that here, technology choices are very much driven by our learning objectives, and wouldn't necessarily make sense, or be the best, in a real production project. The main technologies we will use are the following:
+- Kotlin will be used for the log ingestion service (Ktor server) as well as the log agent interfacing with the ingestion service. Ktor is a pretty adequate choice because it is intrinsically asynchronous (using coroutines), which is often a good choice for use cases where IO and network are big contributors to the latency.
+- Electron with Angular will be used for the desktop app. This choice is probably the most incongruous, because it doesn't make a lot of sense for this to be a desktop app, and Angular might be overkill for a simple app. However, I just want to get some experience building cross-platform desktop apps, and have a personal project in Angular since I recently started using Angular at work.
+- Docker Compose will be used to encapsulate the front-end and back-end, and allow running them together as a unit in a container. This setup is appropriate enough for a dev tool (I intend to use the tool for my local debugging).
+### Target system
+
+Because we will be running in Docker, we will exclusively target Linux (maybe Ubuntu but more likely a lighter distribution). Regarding the log agent, we plan to leverage OS-specific process supervising mechanisms (see [ADR2](adr2-initial-ingestion-layer.md)), and therefore to save time and effort we will only target macOS for the moment, with perhaps Linux as a bonus, but definitely not Windows.
+### Build and packaging
+
+We will use Gradle as our build system, and the main targets of the build will be the following:
+- a jar containing the code required to run the ingestion service
+- a zip including a jar for the log agent as well as everything that is necessary to configure and install process supervision for the agent
+- a Docker image containing both the ingestion service's jar and the desktop app's assets
+
