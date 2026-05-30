@@ -3,7 +3,7 @@
 ## Overview
 
 In this design document, we discuss the high-level design of a simple log analyzer. It is a local developer tool that ingests, indexes, and lets you query 
-logs using extracted fields, time-series aggregation and a query language. It comes with a desktop UI allowing to tail live logs, query historical logs,
+logs using extracted fields, time-series aggregation and a query language. It comes with a UI allowing to tail live logs, query historical logs,
 configure log groups, visualize time series etc.
 
 ## Requirements
@@ -85,7 +85,7 @@ flowchart TD
     end
 
     subgraph ui_ai["UI"]
-        UI["Desktop UI\nElectron · live tail · filtering · saved queries · charts"]
+        UI["UI\nAngular · live tail · filtering · saved queries · charts"]
     end
 
     J --> PP
@@ -142,7 +142,7 @@ This is discussed in more depth in [ADR2](adr2-initial-ingestion-layer.md). It c
 
 In this section, we will go through the tech stack and the organization of the build. It is important to note that here, technology choices are very much driven by our learning objectives, and wouldn't necessarily make sense, or be the best, in a real production project. The main technologies we will use are the following:
 - Kotlin will be used for the log ingestion service (Ktor server) as well as the log agent interfacing with the ingestion service. Ktor is a pretty adequate choice because it is intrinsically asynchronous (using coroutines), which is often a good choice for use cases where IO and network are big contributors to the latency.
-- Electron with Angular will be used for the desktop app. This choice is probably the most incongruous, because it doesn't make a lot of sense for this to be a desktop app, and Angular might be overkill for a simple app. However, I just want to get some experience building cross-platform desktop apps, and have a personal project in Angular since I recently started using Angular at work.
+- Angular will be used for the front-end. It might be overkill for a simple app, but I wanted to have a personal project in Angular since I recently started using Angular at work.
 - Docker Compose will be used to encapsulate the front-end and back-end, and allow running them together as a unit in a container. This setup is appropriate enough for a dev tool (I intend to use the tool for my local debugging).
 ### Target system
 
@@ -152,5 +152,4 @@ Because we will be running in Docker, we will exclusively target Linux (maybe Ub
 We will use Gradle as our build system, and the main targets of the build will be the following:
 - a jar containing the code required to run the ingestion service
 - a zip including a jar for the log agent as well as everything that is necessary to configure and install process supervision for the agent
-- a Docker image containing both the ingestion service's jar and the desktop app's assets
 

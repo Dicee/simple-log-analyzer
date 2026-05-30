@@ -15,8 +15,9 @@ doc/design/reviews
 .gradle
 build/
 
-# Node / Angular / Electron
+# Node / Angular
 node_modules
-desktop-app/dist
-desktop-app/dist-electron
-desktop-app/out-tsc
+angular/out-tsc
+
+# Angular build output (generated into Ktor resources, not committed)
+ingestion-service/src/main/resources/static

@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "simple-log-analyzer-desktop": {
+    "simple-log-analyzer": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -13,7 +13,7 @@
         "build": {
           "builder": "@angular-devkit/build-angular:browser",
           "options": {
-            "outputPath": "dist",
+            "outputPath": "../ingestion-service/src/main/resources/static",
             "index": "src/index.html",
             "main": "src/main.ts",
             "polyfills": ["zone.js"],
@@ -26,10 +26,13 @@
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
-            "buildTarget": "simple-log-analyzer-desktop:build"
+            "buildTarget": "simple-log-analyzer:build"
           }
         }
       }
     }
+  },
+  "cli": {
+    "analytics": false
   }
 }

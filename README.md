@@ -28,5 +28,4 @@ I will strive to find the right balance between using Claude to generate code, a
 - have my first project using Ktor, and manipulate Kotlin coroutines more than I have so far
 - learn about inverted indexing techniques as well as memory mapping and efficient dictionary storage for range queries (using B or B+ tree)
 - use Lucene in a concrete use-case
-- gain some experience using Electron to build a cross-platform desktop app
 - get some more experience with Kotlin and Angular, both of which I know but haven't practiced a lot

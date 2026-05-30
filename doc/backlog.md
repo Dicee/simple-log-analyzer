@@ -12,5 +12,4 @@
 	- Ktor server with appropriate endpoints (not implemented)
 	- separate build module for the log poller and log nanny, with a dummy poller and launch script
 	- Gradle build config
-	- dummy index page for Electron app
-	- Docker setup
+	- dummy index page for Angular app
