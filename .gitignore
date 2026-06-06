@@ -18,6 +18,7 @@ build/
 # Node / Angular
 node_modules
 angular/out-tsc
+angular/.angular/
 
 # Angular build output (generated into Ktor resources, not committed)
 ingestion-service/src/main/resources/static
