@@ -14,6 +14,7 @@ dependencies {
     implementation(rootProject.libs.kotlinx.coroutines.core)
     implementation(rootProject.libs.logback.classic)
     implementation("net.peanuuutz.tomlkt:tomlkt:0.5.0")
+    implementation(project(":commons"))
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.12.2")
 

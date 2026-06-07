@@ -24,7 +24,7 @@ data class LogGroupConfig(val log: LogSection)
 data class LogSection(
     val files: FilesConfig,
     val format: LogFormat = LogFormat.PLAIN_TEXT,
-    val date: DateConfig = DateConfig(format = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"),
+    val date: DateConfig = DateConfig(),
     val maxEventByteSize: ByteSize = ByteSize(1L shl 18), // 256 KiB
     val transit: TransitConfig = TransitConfig(),
     private val maxPutDelaySeconds: Int = 60,
@@ -34,7 +34,7 @@ data class LogSection(
             "log.maxPutDelaySeconds must be between 1 and 3600 (inclusive), got $maxPutDelaySeconds"
         }
         if (format == LogFormat.PLAIN_TEXT) require(date.field == null) {
-            "log.date.field is not applicable for format 'plain-text'"
+            "log.date.field is not applicable for format ${format.displayName}"
         }
     }
 
@@ -49,12 +49,12 @@ data class LogSection(
 }
 
 @Serializable
-data class FilesConfig(val root: String = "", val pattern: String) {
+data class FilesConfig(val root: String = "", val glob: String) {
     init {
-        require(pattern.isNotEmpty()) { "log.files.pattern must be a non-empty string" }
+        require(glob.isNotEmpty()) { "log.files.glob must be a non-empty string" }
 
-        val illegalGlob = pattern.firstOrNull { it in FORBIDDEN_GLOB_CHARS }
-        require(illegalGlob == null) { "log.files.pattern only supports '*' as a glob metacharacter, found '$illegalGlob' in '$pattern'" }
+        val illegalGlob = glob.firstOrNull { it in FORBIDDEN_GLOB_CHARS }
+        require(illegalGlob == null) { "log.files.glob only supports '*' as a glob metacharacter, found '$illegalGlob' in '$glob'" }
 
         if (root.isNotEmpty()) {
             require(root.isNotBlank()) { "log.files.root must not be blank when set" }
@@ -77,17 +77,24 @@ enum class LogFormat(val displayName: String) {
 }
 
 @Serializable
-data class DateConfig(val field: String? = null, val format: String) {
+data class DateConfig(val field: String? = null, val format: String? = null, val isEpochMillis: Boolean = false) {
     init {
+        require(!isEpochMillis || format == null) { "log.date.format and log.date.isEpochMillis are mutually exclusive" }
+
         if (field != null) {
+            require(format != null || isEpochMillis) { "log.date.field requires either log.date.format or log.date.isEpochMillis to be set" }
             require(field.isNotEmpty()) { "log.date.field must be a non-empty string when set" }
+        } else {
+            require(!isEpochMillis) { "log.date.isEpochMillis cannot be set without log.field" }
         }
 
-        require(format.isNotEmpty()) { "log.date.format must be a non-empty string" }
-        try {
-            DateTimeFormatter.ofPattern(format)
-        } catch (e: IllegalArgumentException) {
-            throw IllegalArgumentException("log.date.format is not a valid Java date pattern '$format'", e)
+        if (format != null) {
+            require(format.isNotEmpty()) { "log.date.format must be a non-empty string" }
+            try {
+                DateTimeFormatter.ofPattern(format)
+            } catch (e: IllegalArgumentException) {
+                throw IllegalArgumentException("log.date.format is not a valid Java date pattern '$format'", e)
+            }
         }
     }
 }
@@ -124,7 +131,6 @@ private object ByteSizeSerializer : KSerializer<ByteSize> {
         PrimitiveSerialDescriptor("ByteSize", PrimitiveKind.STRING)
 
     override fun deserialize(decoder: Decoder): ByteSize {
-        //kotlinx.serialization.descriptors.buildSerialDescriptor()
         val raw = decoder.decodeString()
         return try {
             ByteSize.parse(raw)
@@ -176,7 +182,7 @@ enum class Compression {
 
 private val TOML = Toml { ignoreUnknownKeys = false }
 
-object PollerConfigParser {
+object LogPollerConfigParser {
     fun parse(toml: String): Map<String, LogGroupConfig> {
         return TOML.decodeFromString(serializer<Map<String, LogGroupConfig>>(), toml)
     }
