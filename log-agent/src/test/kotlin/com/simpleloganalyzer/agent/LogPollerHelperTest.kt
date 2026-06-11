@@ -5,9 +5,8 @@ import com.simpleloganalyzer.agent.config.DateConfig
 import com.simpleloganalyzer.agent.config.FilesConfig
 import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.testcommons.assertions.MoreAssertions
+import com.simpleloganalyzer.testcommons.time.FakeTickerClock
 import io.mockk.MockKAnnotations
-import io.mockk.every
-import io.mockk.impl.annotations.MockK
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -19,7 +18,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.stream.Stream
-import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -27,7 +26,7 @@ import kotlin.time.Instant
 class LogPollerHelperTest {
     @TempDir private lateinit var tempDir: Path
 
-    @MockK private lateinit var clock: Clock
+    private lateinit var clock: FakeTickerClock
 
     private val now = Instant.fromEpochMilliseconds(1_700_000_000_000L)
     private lateinit var helper: LogPollerHelper
@@ -36,7 +35,7 @@ class LogPollerHelperTest {
     fun setUp() {
         MockKAnnotations.init(this)
 
-        every { clock.now() } returns now
+        clock = FakeTickerClock(initialInstant = now)
         helper = LogPollerHelper(clock)
     }
 
@@ -96,6 +95,42 @@ class LogPollerHelperTest {
 
         val result = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 3)
         assertThatFileNames(result).containsExactly("a.log", "b.log", "c.log")
+    }
+
+    @Test
+    fun testFindMatchingFilesInOrder_caching_returnsStaleThenRefreshesAfterExpiry() {
+        createFile("a.log")
+
+        val first = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        assertThatFileNames(first).containsExactly("a.log")
+
+        // New file added — cache hit should still return the stale result
+        createFile("b.log")
+        val second = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        assertThatFileNames(second).containsExactly("a.log")
+
+        // Advance past the 10-second expiry — cache miss should return the fresh result
+        clock.advanceBy(FILE_CACHE_EXPIRY_SECONDS.seconds).advanceBy(1.seconds)
+        val third = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        assertThatFileNames(third).containsExactly("a.log", "b.log")
+    }
+
+    @Test
+    fun testInvalidateListingCache_clearsEntry_nextCallSeesFreshStateWithoutWaitingForExpiry() {
+        createFile("a.log")
+
+        val first = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        assertThatFileNames(first).containsExactly("a.log")
+
+        // New file added — a cache hit still returns the stale result, proving the listing was cached
+        createFile("b.log")
+        val cached = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        assertThatFileNames(cached).containsExactly("a.log")
+
+        // Invalidate and call again *without* advancing the clock past the 10-second expiry — the fresh result is returned
+        helper.invalidateListingCache(config("*.log"))
+        val afterInvalidation = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        assertThatFileNames(afterInvalidation).containsExactly("a.log", "b.log")
     }
 
     @Test

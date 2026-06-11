@@ -272,7 +272,7 @@ class LogPollerConfigParserTest {
                         format = LogFormat.PLAIN_TEXT,
                         date = DateConfig(format = "dd/MM/yyyy:HH:mm:ss Z"),
                         maxEventByteSize = ByteSize(1024L * 1024),
-                        transit = TransitConfig(compression = Compression.NONE),
+                        transit = TransitConfig(compressionMode = CompressionMode.NONE),
                     ),
                 ),
             )

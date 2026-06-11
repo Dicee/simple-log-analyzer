@@ -1,9 +1,14 @@
 package com.simpleloganalyzer.agent
 
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import com.simpleloganalyzer.agent.config.DateConfig
 import com.simpleloganalyzer.agent.config.FilesConfig
 import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.commons.logging.log
+import com.simpleloganalyzer.commons.time.SystemTickerClock
+import com.simpleloganalyzer.commons.time.TickerClock
+import org.jetbrains.annotations.VisibleForTesting
 import java.nio.file.Path
 import java.text.ParsePosition
 import java.time.LocalDateTime
@@ -11,24 +16,33 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalQueries.zone
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.useDirectoryEntries
-import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
 
 private const val DEFAULT_TS_FIELD = "timestamp"
 
+@VisibleForTesting
+internal const val FILE_CACHE_EXPIRY_SECONDS = 10L
+
 @OptIn(ExperimentalTime::class)
-class LogPollerHelper(private val clock: Clock = Clock.System) {
+class LogPollerHelper(private val clock: TickerClock = SystemTickerClock) {
     private val formatterCache = mutableMapOf<String, DateTimeFormatter>()
+    private val fileListCache: Cache<FilesConfig, List<Path>> = Caffeine.newBuilder()
+        .expireAfterWrite(FILE_CACHE_EXPIRY_SECONDS, TimeUnit.SECONDS)
+        .ticker { clock.readNanos() }
+        .build()
 
     fun findMatchingFilesInOrder(config: FilesConfig, maxFiles: Int): List<Path> {
-        val files = config.rootPath.useDirectoryEntries(config.glob) { paths -> paths
-                .filter { it.isRegularFile() }
-                .sortedBy { it.fileName }
-                .toList()
+        val files = fileListCache.get(config) { cfg ->
+            cfg.rootPath.useDirectoryEntries(cfg.glob) { paths ->
+                paths.filter { it.isRegularFile() }
+                    .sortedBy { it.fileName }
+                    .toList()
+            }
         }
 
         // protection against bad globs, to avoid sending unintended files to the logging service. Typically, there shouldn't be many files on disk matching
@@ -41,6 +55,10 @@ class LogPollerHelper(private val clock: Clock = Clock.System) {
         }
 
         return files
+    }
+
+    fun invalidateListingCache(config: FilesConfig) {
+        fileListCache.invalidate(config)
     }
 
     /**

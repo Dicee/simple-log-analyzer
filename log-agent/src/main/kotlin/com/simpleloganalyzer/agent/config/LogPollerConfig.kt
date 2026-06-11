@@ -148,7 +148,7 @@ private object ByteSizeSerializer : KSerializer<ByteSize> {
 // A bit sad that I had to do this, but I find the default enum serializer bad in terms of error message, and its implementation looks overcomplicated.
 // I am probably missing the point of why they had to do it the way they did, but ok. This is simple and gets me what I want.
 private class LogFormatSerializer : EnumSerializer<LogFormat>(LogFormat::class.java)
-private class CompressionSerializer : EnumSerializer<Compression>(Compression::class.java)
+private class CompressionSerializer : EnumSerializer<CompressionMode>(CompressionMode::class.java)
 private open class EnumSerializer<T: Enum<T>>(private val clazz: Class<T>) : KSerializer<T> {
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor(clazz.name, PrimitiveKind.STRING)
@@ -171,11 +171,11 @@ private open class EnumSerializer<T: Enum<T>>(private val clazz: Class<T>) : KSe
 
 @Serializable
 data class TransitConfig(
-    val compression: Compression = Compression.GZIP,
+    val compressionMode: CompressionMode = CompressionMode.GZIP,
 )
 
 @Serializable(with = CompressionSerializer::class)
-enum class Compression {
+enum class CompressionMode {
     @SerialName("none") NONE,
     @SerialName("gzip") GZIP,
 }

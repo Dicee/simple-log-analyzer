@@ -15,9 +15,10 @@ class FakeTickerClock(initialInstant: Instant = Instant.fromEpochMilliseconds(0)
     private var currentInstant = initialInstant
     private var nanos = 0L
 
-    fun advanceBy(duration: Duration) {
+    fun advanceBy(duration: Duration): FakeTickerClock {
         currentInstant += duration
         nanos += duration.inWholeNanoseconds
+        return this
     }
 
     override fun now(): Instant = currentInstant

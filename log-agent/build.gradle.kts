@@ -12,6 +12,8 @@ application {
 
 dependencies {
     implementation(rootProject.libs.kotlinx.coroutines.core)
+    implementation(rootProject.libs.caffeine)
+    implementation(rootProject.libs.kotlinx.serialization.json)
     implementation(rootProject.libs.logback.classic)
     implementation("net.peanuuutz.tomlkt:tomlkt:0.5.0")
     implementation(project(":commons"))
@@ -21,6 +23,7 @@ dependencies {
     testImplementation(rootProject.libs.junit.jupiter)
     testImplementation(rootProject.libs.assertj.core)
     testImplementation(rootProject.libs.mockk)
+    testImplementation(rootProject.libs.kotlinx.coroutines.test)
     testImplementation(project(":test-commons"))
 }
 

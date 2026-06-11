@@ -2,6 +2,11 @@
 
 - update unit test skill to include Kotlin guidance, after trying MockK and Kotest/Turbine long enough
 - check`java.nio.file.WatchService`
+- log poller implementation
+	- implement multi-line logs
+	- implement a good retry strategy
+	- add unit tests
+	- add end-to-end tests (only ingestion service mocked)
 
 # Done
 - write ADR for log group and log stream concepts
