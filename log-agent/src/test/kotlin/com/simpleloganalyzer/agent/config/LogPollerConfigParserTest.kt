@@ -83,7 +83,7 @@ class LogPollerConfigParserTest {
         """.trimIndent()
 
         MoreAssertions.assertThatThrownBy { LogPollerConfigParser.parse(toml) }
-            .isLike(SerializationException("Invalid value 'snappy' for enumeration Compression. Valid values: [none, gzip]"))
+            .isLike(SerializationException("Invalid value 'snappy' for enumeration CompressionMode. Valid values: [none, gzip]"))
     }
 
     @Test
@@ -272,7 +272,7 @@ class LogPollerConfigParserTest {
                         format = LogFormat.PLAIN_TEXT,
                         date = DateConfig(format = "dd/MM/yyyy:HH:mm:ss Z"),
                         maxEventByteSize = ByteSize(1024L * 1024),
-                        transit = TransitConfig(compressionMode = CompressionMode.NONE),
+                        transit = TransitConfig(compression = CompressionMode.NONE),
                     ),
                 ),
             )
