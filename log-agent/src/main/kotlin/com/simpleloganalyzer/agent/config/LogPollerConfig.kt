@@ -11,6 +11,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.serializer
 import net.peanuuutz.tomlkt.Toml
+import org.jetbrains.annotations.VisibleForTesting
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.format.DateTimeFormatter
@@ -20,6 +21,9 @@ import kotlin.time.Duration.Companion.seconds
 @Serializable
 data class LogGroupConfig(val log: LogSection)
 
+@VisibleForTesting
+internal const val DEFAULT_MAX_PUT_DELAY_SECONDS = 60
+
 @Serializable
 data class LogSection(
     val files: FilesConfig,
@@ -27,7 +31,7 @@ data class LogSection(
     val date: DateConfig = DateConfig(),
     val maxEventByteSize: ByteSize = ByteSize(1L shl 18), // 256 KiB
     val transit: TransitConfig = TransitConfig(),
-    private val maxPutDelaySeconds: Int = 60,
+    private val maxPutDelaySeconds: Int = DEFAULT_MAX_PUT_DELAY_SECONDS,
 ) {
     init {
         require(maxPutDelaySeconds in 1..3600) {
@@ -171,7 +175,7 @@ private open class EnumSerializer<T: Enum<T>>(private val clazz: Class<T>) : KSe
 
 @Serializable
 data class TransitConfig(
-    val compressionMode: CompressionMode = CompressionMode.GZIP,
+    val compression: CompressionMode = CompressionMode.GZIP,
 )
 
 @Serializable(with = CompressionSerializer::class)
