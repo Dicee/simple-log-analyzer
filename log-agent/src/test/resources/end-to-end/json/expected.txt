@@ -1,0 +1,12 @@
+2024-01-15T10:00:00Z|{"timestamp":"2024-01-15 10:00:00","level":"info","msg":"server started"}
+2024-01-15T10:00:01Z|{"timestamp":"2024-01-15 10:00:01","level":"info","msg":"db connected"}
+2024-01-15T10:00:02Z|{"timestamp":"2024-01-15 10:00:02","level":"warn","msg":"slow query 142ms"}
+2024-01-15T10:00:03Z|{"timestamp":"2024-01-15 10:00:03","level":"info","msg":"request 1 ok"}
+2024-01-15T10:00:04Z|{"timestamp":"2024-01-15 10:00:04","level":"info","msg":"request 2 ok"}
+2024-01-15T10:00:05Z|{"timestamp":"2024-01-15 10:00:05","level":"error","msg":"upstream timeout"}
+2024-01-15T10:00:06Z|{"timestamp":"2024-01-15 10:00:06","level":"info","msg":"retry ok"}
+2024-01-15T10:00:07Z|{"timestamp":"2024-01-15 10:00:07","level":"info","msg":"cache miss"}
+2024-01-15T10:00:08Z|{"timestamp":"2024-01-15 10:00:08","level":"info","msg":"cache populated"}
+2024-01-15T10:00:09Z|{"timestamp":"2024-01-15 10:00:09","level":"info","msg":"request 3 ok"}
+2024-01-15T10:00:10Z|{"timestamp":"2024-01-15 10:00:10","level":"info","msg":"request 4 ok"}
+2024-01-15T10:00:11Z|{"timestamp":"2024-01-15 10:00:11","level":"info","msg":"shutting down"}

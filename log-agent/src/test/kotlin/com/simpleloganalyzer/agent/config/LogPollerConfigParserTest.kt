@@ -20,7 +20,7 @@ class LogPollerConfigParserTest {
         """.trimIndent()
 
         MoreAssertions.assertThatThrownBy { LogPollerConfigParser.parse(toml) }
-            .isLike(IllegalArgumentException("log.maxPutDelaySeconds must be between 1 and 3600 (inclusive), got 0"))
+            .isLike(IllegalArgumentException("log.maxPutDelaySeconds must be between 1 and 300 (inclusive), got 0"))
     }
 
     @Test
@@ -28,15 +28,15 @@ class LogPollerConfigParserTest {
         val toml = """
             [g]
             log.files.glob = "x"
-            log.maxPutDelaySeconds = 3601
+            log.maxPutDelaySeconds = 301
         """.trimIndent()
 
         MoreAssertions.assertThatThrownBy { LogPollerConfigParser.parse(toml) }
-            .isLike(IllegalArgumentException("log.maxPutDelaySeconds must be between 1 and 3600 (inclusive), got 3601"))
+            .isLike(IllegalArgumentException("log.maxPutDelaySeconds must be between 1 and 300 (inclusive), got 301"))
     }
 
     @ParameterizedTest
-    @ValueSource(ints = [1, 3600])
+    @ValueSource(ints = [1, 300])
     fun testParse_validation_maxPutDelay_atLowerAndUpperBounds(value: Int) {
         val toml = """
             [g]

@@ -1,0 +1,8 @@
+2024-01-15 12:00:00 INFO  com.example.App - starting up
+2024-01-15 12:00:01 INFO  com.example.App - listening on port 8080
+2024-01-15 12:00:02 INFO  com.example.App - handled request 1
+2024-01-15 12:00:03 ERROR com.example.App - request failed
+java.lang.RuntimeException: boom
+	at com.example.App.handle(App.java:42)
+	at com.example.App.main(App.java:10)
+2024-01-15 12:00:04 INFO  com.example.App - retry successful

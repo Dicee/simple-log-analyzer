@@ -18,6 +18,23 @@ import java.time.format.DateTimeFormatter
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
+// Internal configuration of the agent, separate from the log group config that is set by the user. Some parameters
+// may be set in the CLI, but mostly it's to allow injectability in tests
+@VisibleForTesting
+internal const val DEFAULT_FILE_CACHE_EXPIRY_SECONDS = 10L
+internal const val DEFAULT_PENDING_FILES_PER_LOG_GROUP = 50
+
+data class LogPollerConfig(
+    val fileCacheExpirySeconds: Long = DEFAULT_FILE_CACHE_EXPIRY_SECONDS,
+    val maxPendingFilesPerLogGroup: Int = DEFAULT_PENDING_FILES_PER_LOG_GROUP,
+) {
+    init {
+        require(fileCacheExpirySeconds > 0) { "File cache expiry seconds must be positive" }
+    }
+}
+
+// Customer configuration of the log groups present on their disk
+
 @Serializable
 data class LogGroupConfig(val log: LogSection)
 
@@ -34,8 +51,8 @@ data class LogSection(
     private val maxPutDelaySeconds: Int = DEFAULT_MAX_PUT_DELAY_SECONDS,
 ) {
     init {
-        require(maxPutDelaySeconds in 1..3600) {
-            "log.maxPutDelaySeconds must be between 1 and 3600 (inclusive), got $maxPutDelaySeconds"
+        require(maxPutDelaySeconds in 1..300) {
+            "log.maxPutDelaySeconds must be between 1 and 300 (inclusive), got $maxPutDelaySeconds"
         }
         if (format == LogFormat.PLAIN_TEXT) require(date.field == null) {
             "log.date.field is not applicable for format ${format.displayName}"

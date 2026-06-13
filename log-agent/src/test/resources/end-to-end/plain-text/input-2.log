@@ -1,0 +1,9 @@
+2024-01-15 12:00:05 INFO  com.example.App - processing batch
+2024-01-15 12:00:06 WARN  com.example.App - slow downstream
+2024-01-15 12:00:07 ERROR com.example.App - downstream gave up
+java.io.IOException: connection reset
+	at com.example.Client.read(Client.java:88)
+	at com.example.App.fetch(App.java:55)
+Caused by: java.net.SocketException: broken pipe
+	at sun.nio.ch.SocketChannelImpl.read(SocketChannelImpl.java:120)
+2024-01-15 12:00:08 INFO  com.example.App - clean exit

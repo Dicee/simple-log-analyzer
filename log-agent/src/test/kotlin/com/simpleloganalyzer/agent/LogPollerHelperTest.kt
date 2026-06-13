@@ -2,8 +2,10 @@
 package com.simpleloganalyzer.agent
 
 import com.simpleloganalyzer.agent.config.DateConfig
+import com.simpleloganalyzer.agent.config.DEFAULT_FILE_CACHE_EXPIRY_SECONDS
 import com.simpleloganalyzer.agent.config.FilesConfig
 import com.simpleloganalyzer.agent.config.LogFormat
+import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.testcommons.assertions.MoreAssertions
 import com.simpleloganalyzer.testcommons.time.FakeTickerClock
 import io.mockk.MockKAnnotations
@@ -43,7 +45,7 @@ class LogPollerHelperTest {
     fun testFindMatchingFilesInOrder_noMatchingFiles_returnsEmpty() {
         createFile("app.txt")
 
-        val result = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        val result = helper.findMatchingFilesInOrder(config("*.log"))
         assertThat(result).isEmpty()
     }
 
@@ -53,7 +55,7 @@ class LogPollerHelperTest {
         createFile("a.log")
         createFile("b.log")
 
-        val result = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        val result = helper.findMatchingFilesInOrder(config("*.log"))
         assertThatFileNames(result).containsExactly("a.log", "b.log", "c.log")
     }
 
@@ -63,7 +65,7 @@ class LogPollerHelperTest {
         createFile("app.txt")
         createFile("other.log.gz")
 
-        val result = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        val result = helper.findMatchingFilesInOrder(config("*.log"))
         assertThatFileNames(result).containsExactly("app.log")
     }
 
@@ -74,7 +76,7 @@ class LogPollerHelperTest {
         createFile("application.log.2")
         createFile("other.log")
 
-        val result = helper.findMatchingFilesInOrder(config("application.log*"), maxFiles = 10)
+        val result = helper.findMatchingFilesInOrder(config("application.log*"))
         assertThatFileNames(result).containsExactly("application.log", "application.log.1", "application.log.2")
     }
 
@@ -83,7 +85,7 @@ class LogPollerHelperTest {
         createFile("app.log")
         createDir("subdir.log")
 
-        val result = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        val result = helper.findMatchingFilesInOrder(config("*.log"))
         assertThatFileNames(result).containsExactly("app.log")
     }
 
@@ -93,7 +95,8 @@ class LogPollerHelperTest {
         createFile("b.log")
         createFile("c.log")
 
-        val result = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 3)
+        helper = LogPollerHelper(clock, LogPollerConfig(maxPendingFilesPerLogGroup = 3))
+        val result = helper.findMatchingFilesInOrder(config("*.log"))
         assertThatFileNames(result).containsExactly("a.log", "b.log", "c.log")
     }
 
@@ -101,17 +104,17 @@ class LogPollerHelperTest {
     fun testFindMatchingFilesInOrder_caching_returnsStaleThenRefreshesAfterExpiry() {
         createFile("a.log")
 
-        val first = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        val first = helper.findMatchingFilesInOrder(config("*.log"))
         assertThatFileNames(first).containsExactly("a.log")
 
         // New file added — cache hit should still return the stale result
         createFile("b.log")
-        val second = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        val second = helper.findMatchingFilesInOrder(config("*.log"))
         assertThatFileNames(second).containsExactly("a.log")
 
         // Advance past the 10-second expiry — cache miss should return the fresh result
-        clock.advanceBy(FILE_CACHE_EXPIRY_SECONDS.seconds).advanceBy(1.seconds)
-        val third = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        clock.advanceBy(DEFAULT_FILE_CACHE_EXPIRY_SECONDS.seconds).advanceBy(1.seconds)
+        val third = helper.findMatchingFilesInOrder(config("*.log"))
         assertThatFileNames(third).containsExactly("a.log", "b.log")
     }
 
@@ -119,17 +122,17 @@ class LogPollerHelperTest {
     fun testInvalidateListingCache_clearsEntry_nextCallSeesFreshStateWithoutWaitingForExpiry() {
         createFile("a.log")
 
-        val first = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        val first = helper.findMatchingFilesInOrder(config("*.log"))
         assertThatFileNames(first).containsExactly("a.log")
 
         // New file added — a cache hit still returns the stale result, proving the listing was cached
         createFile("b.log")
-        val cached = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        val cached = helper.findMatchingFilesInOrder(config("*.log"))
         assertThatFileNames(cached).containsExactly("a.log")
 
         // Invalidate and call again *without* advancing the clock past the 10-second expiry — the fresh result is returned
         helper.invalidateListingCache(config("*.log"))
-        val afterInvalidation = helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 10)
+        val afterInvalidation = helper.findMatchingFilesInOrder(config("*.log"))
         assertThatFileNames(afterInvalidation).containsExactly("a.log", "b.log")
     }
 
@@ -139,7 +142,8 @@ class LogPollerHelperTest {
         createFile("b.log")
         createFile("c.log")
 
-        MoreAssertions.assertThatThrownBy { helper.findMatchingFilesInOrder(config("*.log"), maxFiles = 2) }
+        helper = LogPollerHelper(clock, LogPollerConfig(maxPendingFilesPerLogGroup = 2))
+        MoreAssertions.assertThatThrownBy { helper.findMatchingFilesInOrder(config("*.log")) }
             .isLike(IllegalStateException(
             "Suspiciously high number of files matching glob '*.log' in $tempDir " +
                 "(found 3, max tolerated is 2). Double-check your log configuration, and if it looks correct you may override " +

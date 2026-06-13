@@ -44,7 +44,6 @@ import kotlin.time.toKotlinInstant
 class LogPollerTest {
     private companion object {
         const val GROUP = "my-group"
-        const val MAX_PENDING_FILES = 10
         const val TS_FORMAT = "yyyy-MM-dd HH:mm:ss"
         val FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern(TS_FORMAT)
         val FIXED_TIMESTAMP = Instant.fromEpochMilliseconds(0)
@@ -76,11 +75,14 @@ class LogPollerTest {
                 poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).containsExactly(
-                RawLogEvent(instant("2023-11-14 09:15:00"), lines[0]),
-                RawLogEvent(instant("2023-11-14 09:15:02"), lines[1]),
-                RawLogEvent(instant("2023-11-14 09:15:03"), lines[2]),
-            )
+            assertThat(batch).isEqualTo(Batch(
+                events = listOf(
+                    RawLogEvent(instant("2023-11-14 09:15:00"), lines[0]),
+                    RawLogEvent(instant("2023-11-14 09:15:02"), lines[1]),
+                    RawLogEvent(instant("2023-11-14 09:15:03"), lines[2]),
+                ),
+                eof = false,
+            ))
             // No newer file exists, so the batch is held open until exactly maxPutDelay of virtual time has elapsed.
             assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
         }
@@ -101,10 +103,13 @@ class LogPollerTest {
                 poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).containsExactly(
-                RawLogEvent(instant("2023-11-14 09:15:00"), lines[0]),
-                RawLogEvent(instant("2023-11-14 09:15:01"), lines[1]),
-            )
+            assertThat(batch).isEqualTo(Batch(
+                events = listOf(
+                    RawLogEvent(instant("2023-11-14 09:15:00"), lines[0]),
+                    RawLogEvent(instant("2023-11-14 09:15:01"), lines[1]),
+                ),
+                eof = true,
+            ))
             // Rotation was detected at EOF, so we flush right away rather than waiting out maxPutDelay.
             assertThat(testScheduler.currentTime).isZero()
         }
@@ -121,7 +126,7 @@ class LogPollerTest {
                 poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).isEmpty()
+            assertThat(batch).isEqualTo(Batch(listOf(), true))
             assertThat(testScheduler.currentTime).isZero()
         }
 
@@ -135,7 +140,10 @@ class LogPollerTest {
                 poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).containsExactly(RawLogEvent(FIXED_TIMESTAMP, "no timestamp here"))
+            assertThat(batch).isEqualTo(Batch(
+                events = listOf(RawLogEvent(FIXED_TIMESTAMP, "no timestamp here")),
+                eof = false
+            ))
         }
 
         @Test
@@ -149,7 +157,10 @@ class LogPollerTest {
             }
 
             // The timestamped line opens an event; with no successor file it is only finalized once maxPutDelay elapses.
-            assertThat(batch).containsExactly(RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 hello"))
+            assertThat(batch).isEqualTo(Batch(
+                events = listOf(RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 hello")),
+                    eof = false
+            ))
             assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
         }
 
@@ -165,7 +176,8 @@ class LogPollerTest {
             }
 
             // Rotation finalizes the open event right away, without waiting out maxPutDelay.
-            assertThat(batch).containsExactly(RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 hello"))
+            val expectedEvent = RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 hello")
+            assertThat(batch).isEqualTo(Batch(events = listOf(expectedEvent), eof = true))
             assertThat(testScheduler.currentTime).isZero()
         }
 
@@ -180,7 +192,8 @@ class LogPollerTest {
                 poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).containsExactly(RawLogEvent(instant("2023-01-01 00:00:00"), lines.joinToString("\n")))
+            val expectedEvent = RawLogEvent(instant("2023-01-01 00:00:00"), lines.joinToString("\n"))
+            assertThat(batch).isEqualTo(Batch(events = listOf(expectedEvent), eof = false))
             assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
         }
 
@@ -196,7 +209,8 @@ class LogPollerTest {
                 poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).containsExactly(RawLogEvent(instant("2023-01-01 00:00:00"), lines.joinToString("\n")))
+            val expectedEVent = RawLogEvent(instant("2023-01-01 00:00:00"), lines.joinToString("\n"))
+            assertThat(batch).isEqualTo(Batch(events = listOf(expectedEVent), eof = true))
             assertThat(testScheduler.currentTime).isZero()
         }
 
@@ -217,12 +231,15 @@ class LogPollerTest {
                 poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).containsExactly(
-                RawLogEvent(FIXED_TIMESTAMP, "preamble without timestamp"),
-                RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 boom\n  at Foo.bar(Foo.kt:1)"),
-                RawLogEvent(instant("2023-01-01 00:00:05"), "2023-01-01 00:00:05 single"),
-                RawLogEvent(instant("2023-01-01 00:00:10"), "2023-01-01 00:00:10 trailing"),
-            )
+            assertThat(batch).isEqualTo(Batch(
+                events = listOf(
+                    RawLogEvent(FIXED_TIMESTAMP, "preamble without timestamp"),
+                    RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 boom\n  at Foo.bar(Foo.kt:1)"),
+                    RawLogEvent(instant("2023-01-01 00:00:05"), "2023-01-01 00:00:05 single"),
+                    RawLogEvent(instant("2023-01-01 00:00:10"), "2023-01-01 00:00:10 trailing"),
+                ),
+                eof = false,
+            ))
             assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
         }
 
@@ -350,7 +367,7 @@ class LogPollerTest {
             var hasThrown = false
             // Always report the same single head file, except for one transient failure on the first listing that
             // happens after the first batch has been published (i.e. after the head file was partially consumed).
-            every { helper.findMatchingFilesInOrder(filesConfig, MAX_PENDING_FILES) } answers {
+            every { helper.findMatchingFilesInOrder(filesConfig) } answers {
                 if (!hasThrown && client.eventsFor(GROUP).isNotEmpty()) {
                     hasThrown = true
                     throw RuntimeException("transient listing failure")
@@ -380,12 +397,12 @@ class LogPollerTest {
 
         /** Makes the discovery helper reflect the live top-level contents of [tempDir], mirroring real rotation. */
         private fun stubLiveFileListing(filesConfig: FilesConfig) {
-            every { helper.findMatchingFilesInOrder(filesConfig, MAX_PENDING_FILES) } answers { listMatchingFiles() }
+            every { helper.findMatchingFilesInOrder(filesConfig) } answers { listMatchingFiles() }
         }
 
         // Only the raw line varies; the plain-text format and (empty) date config are fixed by the log group config.
         private fun stubFixedTimestamp() {
-            every { helper.extractEventTimestamp(any(), LogFormat.PLAIN_TEXT, DateConfig()) } returns FIXED_TIMESTAMP
+            every { helper.extractEventTimestamp(any(), LogFormat.PLAIN_TEXT, DateConfig(), any()) } returns FIXED_TIMESTAMP
         }
 
         private fun listMatchingFiles(): List<Path> =
@@ -418,7 +435,6 @@ class LogPollerTest {
             ingestionServiceClient = client,
             clock = virtualClock(),
             helper = helper,
-            maxPendingFilesPerLogGroup = MAX_PENDING_FILES,
             cpuDispatcher = dispatcher,
             loomDispatcher = dispatcher,
         )

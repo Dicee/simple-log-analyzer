@@ -5,10 +5,10 @@ import com.github.benmanes.caffeine.cache.Caffeine
 import com.simpleloganalyzer.agent.config.DateConfig
 import com.simpleloganalyzer.agent.config.FilesConfig
 import com.simpleloganalyzer.agent.config.LogFormat
+import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.commons.logging.log
 import com.simpleloganalyzer.commons.time.SystemTickerClock
 import com.simpleloganalyzer.commons.time.TickerClock
-import org.jetbrains.annotations.VisibleForTesting
 import java.nio.file.Path
 import java.text.ParsePosition
 import java.time.LocalDateTime
@@ -25,18 +25,18 @@ import kotlin.time.toKotlinInstant
 
 private const val DEFAULT_TS_FIELD = "timestamp"
 
-@VisibleForTesting
-internal const val FILE_CACHE_EXPIRY_SECONDS = 10L
-
 @OptIn(ExperimentalTime::class)
-class LogPollerHelper(private val clock: TickerClock = SystemTickerClock) {
+class LogPollerHelper(
+    private val clock: TickerClock = SystemTickerClock,
+    private val pollerConfig: LogPollerConfig = LogPollerConfig()
+) {
     private val formatterCache = mutableMapOf<String, DateTimeFormatter>()
     private val fileListCache: Cache<FilesConfig, List<Path>> = Caffeine.newBuilder()
-        .expireAfterWrite(FILE_CACHE_EXPIRY_SECONDS, TimeUnit.SECONDS)
+        .expireAfterWrite(pollerConfig.fileCacheExpirySeconds, TimeUnit.SECONDS)
         .ticker { clock.readNanos() }
         .build()
 
-    fun findMatchingFilesInOrder(config: FilesConfig, maxFiles: Int): List<Path> {
+    fun findMatchingFilesInOrder(config: FilesConfig): List<Path> {
         val files = fileListCache.get(config) { cfg ->
             cfg.rootPath.useDirectoryEntries(cfg.glob) { paths ->
                 paths.filter { it.isRegularFile() }
@@ -47,6 +47,7 @@ class LogPollerHelper(private val clock: TickerClock = SystemTickerClock) {
 
         // protection against bad globs, to avoid sending unintended files to the logging service. Typically, there shouldn't be many files on disk matching
         // a certain pattern.
+        val maxFiles = pollerConfig.maxPendingFilesPerLogGroup
         if (files.size > maxFiles) {
             throw IllegalStateException("Suspiciously high number of files matching glob '${config.glob}' in ${config.rootPath} " +
                     "(found ${files.size}, max tolerated is $maxFiles). Double-check your log configuration, and if it looks correct you may override " +
@@ -65,7 +66,7 @@ class LogPollerHelper(private val clock: TickerClock = SystemTickerClock) {
      * Extracts the event timestamp from a raw event, or null to current time in the absence of proper configuration
      * (timestamp field or date format), or in case of an exception during the extraction process.
      */
-    fun extractEventTimestamp(raw: String, format: LogFormat, config: DateConfig): Instant? {
+    fun extractEventTimestamp(raw: String, format: LogFormat, config: DateConfig, isPendingEvent: Boolean = false): Instant? {
         if (config.field == null && config.format == null) return null
 
         return try {
@@ -79,7 +80,8 @@ class LogPollerHelper(private val clock: TickerClock = SystemTickerClock) {
                 }
             }
         } catch (e: RuntimeException) {
-            log.warn("Failed to extract event timestamp, falling back to current time", e)
+            // if we reach here and isPendingEvent is true, it indicates that this is a multiline event. At least in normal circumstances...
+            if (!isPendingEvent) log.warn("Failed to extract event timestamp, falling back to current time", e)
             null
         }
     }

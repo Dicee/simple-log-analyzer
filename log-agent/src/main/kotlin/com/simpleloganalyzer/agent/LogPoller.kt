@@ -3,7 +3,9 @@ package com.simpleloganalyzer.agent
 import com.simpleloganalyzer.agent.config.CompressionMode
 import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.agent.config.LogGroupConfig
+import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.commons.logging.log
+import com.simpleloganalyzer.commons.time.SystemTickerClock
 import com.simpleloganalyzer.commons.time.TickerClock
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
@@ -41,10 +43,10 @@ private val PUBLISH_RETRY_MAX_BACKOFF = RESTART_BACKOFF
 @ExperimentalTime
 internal class LogPoller(
     private val logGroupConfigs: Map<String, LogGroupConfig>,
+    private val logPollerConfig: LogPollerConfig = LogPollerConfig(),
     private val ingestionServiceClient: LogIngestionServiceClient,
-    private val clock: TickerClock,
-    private val helper: LogPollerHelper = LogPollerHelper(clock),
-    private val maxPendingFilesPerLogGroup: Int,
+    private val clock: TickerClock = SystemTickerClock,
+    private val helper: LogPollerHelper = LogPollerHelper(clock, logPollerConfig),
     private val cpuDispatcher: CoroutineDispatcher = Dispatchers.Default,
     // More efficient than using Dispatchers.IO since it doesn't require holding real OS threads to parallelize the IO. See
     // https://kt.academy/article/dispatcher-loom
@@ -117,7 +119,7 @@ internal class LogPoller(
         val filesConfig = config.log.files
 
         while (true) {
-            val files = helper.findMatchingFilesInOrder(filesConfig, maxPendingFilesPerLogGroup)
+            val files = helper.findMatchingFilesInOrder(filesConfig)
             if (files.isEmpty()) {
                 delay(freq)
                 continue
@@ -146,9 +148,9 @@ internal class LogPoller(
 
             while (currentCoroutineContext().isActive) {
                 val batch = nextBatch(config, freq, reader, logEventBuilder)
-                if (batch.isEmpty()) break
 
-                collector.emit(batch)
+                if (batch.events.isNotEmpty()) collector.emit(batch.events)
+                if (batch.eof) break
             }
         }
     }
@@ -159,24 +161,27 @@ internal class LogPoller(
         freq: Duration,
         reader: BufferedReader,
         logEventBuilder: RawLogEventBuilder,
-    ): List<RawLogEvent> {
-        return buildList {
-            var batchStartedAt: Instant? = null
+    ): Batch {
+        var eof = false
+        val events = buildList {
+            var batchStartedAt: Instant? = logEventBuilder.eventStartedAt // in case there's any pending multiline event, reuse its timestamp
 
             while (currentCoroutineContext().isActive) {
                 if (batchStartedAt != null && clock.now() - batchStartedAt >= config.log.maxPutDelay) {
-                    // the batch has been open long enough: flush any in-progress multi-line event so we don't hold it past the latency bound
-                    logEventBuilder.flush()?.let { add(it) }
+                    // the batch has been open long enough, so we break, but we give some extra time to possibly incomplete multiline events - might get added
+                    // to the next batch instead
+                    logEventBuilder.flushIfOlderThan(config.log.maxPutDelay)?.let { add(it) }
                     break
                 }
 
                 val line = reader.readLine()
                 if (line == null) {
                     // note that the helper internally caches the value for a short amount of time, so we can afford looping on this
-                    val files = helper.findMatchingFilesInOrder(config.log.files, maxPendingFilesPerLogGroup)
+                    val files = helper.findMatchingFilesInOrder(config.log.files)
                     if (files.size > 1) {
                         // there's a next file, so we flush the ongoing log event if any, and return to activate rotation
                         logEventBuilder.flush()?.let { add(it) }
+                        eof = true
                         break
                     }
                     delay(freq) // otherwise, we wait a bit because some new data might be written in the current file
@@ -190,6 +195,7 @@ internal class LogPoller(
                 }
             }
         }
+        return Batch(events, eof)
     }
 
     // shuts down the backing virtual-thread executor; the caller is responsible for cancelling the polling scope first.
@@ -204,6 +210,8 @@ internal class LogPoller(
      * another. This allows carrying the state of partially consumed events when we had to flush a batch before reading the full event.
      */
     internal inner class RawLogEventBuilder(private val config: LogGroupConfig) {
+        // Time we started collecting it. Important to separate from the event's timestamp in case we ingest historical logs.
+        internal var eventStartedAt: Instant? = null
         private var timestamp: Instant? = null
         private val lines: MutableList<String> = mutableListOf()
 
@@ -213,40 +221,47 @@ internal class LogPoller(
         fun addLine(line: String): RawLogEvent? {
             val now = clock.now()
             val format = config.log.format
-            val timestamp = helper.extractEventTimestamp(line, format, config.log.date)
+            val timestamp = helper.extractEventTimestamp(line, format, config.log.date, isPendingEvent = lines.isNotEmpty())
 
             // every line is an event for these formats
             if (format != LogFormat.PLAIN_TEXT) return RawLogEvent(timestamp ?: now, line)
-
-            if (this.timestamp == null) {
+            return if (eventStartedAt == null) {
                 // if there's no timestamp on the line, we assume it's a single-line event and assign a default timestamp
                 if (timestamp == null) return RawLogEvent(now, line)
-
-                this.timestamp = timestamp
+                startNewEvent(timestamp, line)
+                null
             } else if (timestamp != null) {
-                val event = doFlush(this.timestamp)
-
-                this.timestamp = timestamp
+                val event = doFlush()
+                startNewEvent(timestamp, line)
+                event
+            } else {
                 lines += line
-
-                return event
+                null
             }
+        }
 
+        private fun startNewEvent(timestamp: Instant, line: String) {
+            eventStartedAt = clock.now()
+            this.timestamp = timestamp
             lines += line
-            return null
         }
 
         /**
          * Flushes any pending content in a [RawLogEvent], or returns null if there is no pending content.
          */
         fun flush(): RawLogEvent? {
-            return if (timestamp != null) doFlush(timestamp) else null
+            return if (eventStartedAt != null) doFlush() else null
         }
 
-        private fun doFlush(timestamp: Instant?): RawLogEvent {
+        fun flushIfOlderThan(duration: Duration): RawLogEvent? {
+            return if (eventStartedAt != null && clock.now() - eventStartedAt!! >= duration) doFlush() else null
+        }
+
+        private fun doFlush(): RawLogEvent {
             val event = RawLogEvent(timestamp!!, lines.joinToString("\n"))
 
-            this.timestamp = null
+            eventStartedAt = null
+            timestamp = null
             lines.clear()
 
             return event
@@ -254,4 +269,5 @@ internal class LogPoller(
     }
 }
 
+internal data class Batch(val events: List<RawLogEvent>, val eof: Boolean)
 private fun jitter(duration: Duration): Duration = duration + JITTER * Math.random()

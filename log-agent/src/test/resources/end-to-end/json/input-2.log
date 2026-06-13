@@ -1,0 +1,6 @@
+{"timestamp":"2024-01-15 10:00:06","level":"info","msg":"retry ok"}
+{"timestamp":"2024-01-15 10:00:07","level":"info","msg":"cache miss"}
+{"timestamp":"2024-01-15 10:00:08","level":"info","msg":"cache populated"}
+{"timestamp":"2024-01-15 10:00:09","level":"info","msg":"request 3 ok"}
+{"timestamp":"2024-01-15 10:00:10","level":"info","msg":"request 4 ok"}
+{"timestamp":"2024-01-15 10:00:11","level":"info","msg":"shutting down"}

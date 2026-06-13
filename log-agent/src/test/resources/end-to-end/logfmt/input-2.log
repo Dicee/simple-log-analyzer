@@ -1,0 +1,6 @@
+timestamp="2024-01-15 11:00:06" level=info msg="retry ok"
+timestamp="2024-01-15 11:00:07" level=info msg="cache hit"
+timestamp="2024-01-15 11:00:08" level=info msg="cache populated"
+timestamp="2024-01-15 11:00:09" level=info msg="job started"
+timestamp="2024-01-15 11:00:10" level=info msg="job completed"
+timestamp="2024-01-15 11:00:11" level=info msg="shutting down"

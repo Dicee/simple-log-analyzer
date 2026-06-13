@@ -1,6 +1,7 @@
 package com.simpleloganalyzer.agent
 
-import com.simpleloganalyzer.commons.time.SystemTickerClock
+import com.simpleloganalyzer.agent.config.DEFAULT_PENDING_FILES_PER_LOG_GROUP
+import com.simpleloganalyzer.agent.config.LogPollerConfig
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
@@ -15,7 +16,6 @@ import kotlin.time.ExperimentalTime
 private val log = LoggerFactory.getLogger("log-agent")
 
 private const val PROP_MAX_FILES = "poller.maxPendingFilesPerLogGroup"
-private const val DEFAULT_MAX_FILES = 10
 
 val loomIo: CoroutineDispatcher = Executors.newVirtualThreadPerTaskExecutor()
         .asCoroutineDispatcher()
@@ -28,9 +28,8 @@ fun main() {
     runBlocking {
         val logPoller = LogPoller(
             logGroupConfigs = mapOf(),
+            logPollerConfig = LogPollerConfig(maxPendingFilesPerLogGroup = maxFiles),
             ingestionServiceClient = DummyLogIngestionServiceClient(),
-            clock = SystemTickerClock,
-            maxPendingFilesPerLogGroup = maxFiles,
         )
 
         Runtime.getRuntime().addShutdownHook(Thread {
@@ -46,7 +45,7 @@ fun main() {
 
 // for now very simple, if we need more arguments we can use a real CLI arg parsing library
 private fun parseMaxFiles(): Int {
-    val raw = System.getProperty(PROP_MAX_FILES) ?: return DEFAULT_MAX_FILES
+    val raw = System.getProperty(PROP_MAX_FILES) ?: return DEFAULT_PENDING_FILES_PER_LOG_GROUP
     val value = raw.toIntOrNull()
     if (value == null || value < 1) {
         System.err.println("""
@@ -54,7 +53,7 @@ private fun parseMaxFiles(): Int {
 
             Usage: java -D$PROP_MAX_FILES=<n> -jar log-agent.jar
 
-              $PROP_MAX_FILES  (default: $DEFAULT_MAX_FILES)
+              $PROP_MAX_FILES  (default: $DEFAULT_PENDING_FILES_PER_LOG_GROUP)
                 Maximum number of files allowed to match a log group's glob pattern.
                 Acts as a safety guard against misconfigured globs that accidentally
                 match a large number of files. Must be a positive integer.

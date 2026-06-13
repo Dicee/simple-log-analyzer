@@ -1,0 +1,6 @@
+timestamp="2024-01-15 11:00:00" level=info msg="server started"
+timestamp="2024-01-15 11:00:01" level=info msg="db connected"
+timestamp="2024-01-15 11:00:02" level=warn msg="slow query"
+timestamp="2024-01-15 11:00:03" level=info msg="request handled"
+timestamp="2024-01-15 11:00:04" level=info msg="user login"
+timestamp="2024-01-15 11:00:05" level=error msg="upstream timeout"
