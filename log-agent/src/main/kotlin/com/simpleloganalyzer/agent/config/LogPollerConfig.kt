@@ -16,6 +16,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 // Internal configuration of the agent, separate from the log group config that is set by the user. Some parameters
@@ -24,12 +25,27 @@ import kotlin.time.Duration.Companion.seconds
 internal const val DEFAULT_FILE_CACHE_EXPIRY_SECONDS = 10L
 internal const val DEFAULT_PENDING_FILES_PER_LOG_GROUP = 50
 
+private const val LOG_BATCH_SIZE = 1000 // non-configurable, comes from the ingestion service
+private val DEFAULT_JITTER = 100.milliseconds
+
+// how long to wait before restarting a log group's pipeline after a failure
+private val DEFAULT_RESTART_BACKOFF = 15.seconds
+private val DEFAULT_PUBLISH_RETRY_INITIAL_BACKOFF = 200.milliseconds
+private val DEFAULT_PUBLISH_RETRY_MAX_BACKOFF = DEFAULT_RESTART_BACKOFF
+
 data class LogPollerConfig(
     val fileCacheExpirySeconds: Long = DEFAULT_FILE_CACHE_EXPIRY_SECONDS,
     val maxPendingFilesPerLogGroup: Int = DEFAULT_PENDING_FILES_PER_LOG_GROUP,
+    val logBatchSize: Int = LOG_BATCH_SIZE,
+    val jitter: Duration = DEFAULT_JITTER,
+    val restartBackoff: Duration = DEFAULT_RESTART_BACKOFF,
+    val publishRetryInitialBackoff: Duration = DEFAULT_PUBLISH_RETRY_INITIAL_BACKOFF,
+    val publishRetryMaxBackoff: Duration = DEFAULT_PUBLISH_RETRY_MAX_BACKOFF,
 ) {
     init {
+        require(maxPendingFilesPerLogGroup > 0) { "Max pending files per log group must be positive" }
         require(fileCacheExpirySeconds > 0) { "File cache expiry seconds must be positive" }
+        require(logBatchSize > 0) { "Log batch size must be positive" }
     }
 }
 

@@ -22,3 +22,7 @@ angular/.angular/
 
 # Angular build output (generated into Ktor resources, not committed)
 ingestion-service/src/main/resources/static
+
+# Claude Code struggling mightily to reliably use Gradle in Windows because it's trying random bash scripts,
+# so helping it a bit with an explicit environment flag.
+.devenv

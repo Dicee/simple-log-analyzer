@@ -28,7 +28,7 @@ fun main() {
     runBlocking {
         val logPoller = LogPoller(
             logGroupConfigs = mapOf(),
-            logPollerConfig = LogPollerConfig(maxPendingFilesPerLogGroup = maxFiles),
+            pollerConfig = LogPollerConfig(maxPendingFilesPerLogGroup = maxFiles),
             ingestionServiceClient = DummyLogIngestionServiceClient(),
         )
 

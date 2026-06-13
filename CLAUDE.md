@@ -13,7 +13,9 @@ Important rules to follow:
 
 ## Writing Kotlin tests
 
-Even though it's primarily aimed at Java, please read the `java-gradle-unit-tests-crafting-workflow` skill before writing or executing tests. Most of its guidelines also apply to Kotlin.
+Even though it's primarily aimed at Java, please read the `java-gradle-unit-tests-crafting-workflow` skill before writing or executing tests. Most of its guidelines also apply to Kotlin. 
+Read the `.devenv` file to understand which environment you are executing under. In Windows, DO NOT TRY USING BASH, duh! If the file is missing, determine the environment by yourself or 
+ask the user.
 
 # Architecture review guidelines
 

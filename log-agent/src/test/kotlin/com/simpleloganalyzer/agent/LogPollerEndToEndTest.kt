@@ -19,7 +19,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
-import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.SoftAssertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -98,7 +97,7 @@ class LogPollerEndToEndTest {
         val pollerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val poller = LogPoller(
             logGroupConfigs = configs,
-            logPollerConfig = LogPollerConfig(fileCacheExpirySeconds = 1),
+            pollerConfig = LogPollerConfig(fileCacheExpirySeconds = 1),
             ingestionServiceClient = client,
             clock = SystemTickerClock,
         )

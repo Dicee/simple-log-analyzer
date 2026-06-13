@@ -24,29 +24,18 @@ import java.util.concurrent.Executors
 import java.util.zip.GZIPOutputStream
 import kotlin.io.path.name
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.time.times
 
-// non-configurable, comes from the ingestion service
-const val LOG_BATCH_SIZE = 1000
-
-private val JITTER = 100.milliseconds
-
-// how long to wait before restarting a log group's pipeline after a failure
-private val RESTART_BACKOFF = 15.seconds
-private val PUBLISH_RETRY_INITIAL_BACKOFF = 200.milliseconds
-private val PUBLISH_RETRY_MAX_BACKOFF = RESTART_BACKOFF
-
 @ExperimentalTime
 internal class LogPoller(
     private val logGroupConfigs: Map<String, LogGroupConfig>,
-    private val logPollerConfig: LogPollerConfig = LogPollerConfig(),
+    private val pollerConfig: LogPollerConfig = LogPollerConfig(),
     private val ingestionServiceClient: LogIngestionServiceClient,
     private val clock: TickerClock = SystemTickerClock,
-    private val helper: LogPollerHelper = LogPollerHelper(clock, logPollerConfig),
+    private val helper: LogPollerHelper = LogPollerHelper(clock, pollerConfig),
     private val cpuDispatcher: CoroutineDispatcher = Dispatchers.Default,
     // More efficient than using Dispatchers.IO since it doesn't require holding real OS threads to parallelize the IO. See
     // https://kt.academy/article/dispatcher-loom
@@ -68,7 +57,7 @@ internal class LogPoller(
                     } catch (e: Exception) {
                         // TODO: in the first version without checkpoints, we accept duplication, and simply restart the ingestion
                         // TODO: from the head file, first line.
-                        val backoff = jitter(RESTART_BACKOFF)
+                        val backoff = jitter(pollerConfig.jitter)
                         log.error("Log group '$logGroupName' pipeline failed, restarting in $backoff", e)
                         delay(backoff)
                     }
@@ -92,7 +81,9 @@ internal class LogPoller(
                             ingestionServiceClient.publishLogs(logGroupName, payload, compressionMode)
                             success = true
                         } catch (e: RuntimeException) {
-                            val backoff = jitter(minOf((1 shl attempt) * PUBLISH_RETRY_INITIAL_BACKOFF, PUBLISH_RETRY_MAX_BACKOFF))
+                            val initialBackoff = pollerConfig.publishRetryInitialBackoff
+                            val maxBackoff = pollerConfig.publishRetryMaxBackoff
+                            val backoff = jitter(minOf((1 shl attempt) * initialBackoff, maxBackoff))
 
                             log.error("Failed publishing batch for $logGroupName. Retrying in $backoff...", e)
                             delay(backoff)
@@ -191,7 +182,7 @@ internal class LogPoller(
                     val event = logEventBuilder.addLine(line)
                     if (event != null) add(event)
 
-                    if (size == LOG_BATCH_SIZE) break
+                    if (size == pollerConfig.logBatchSize) break
                 }
             }
         }
@@ -203,6 +194,8 @@ internal class LogPoller(
     override fun close() {
         (loomDispatcher as? ExecutorCoroutineDispatcher)?.close()
     }
+
+    private fun jitter(duration: Duration): Duration = duration + pollerConfig.jitter * Math.random()
 
     /**
      * Stateful builder which allows transparently building single or multi-line events depending on the log configuration. The builder's
@@ -270,4 +263,3 @@ internal class LogPoller(
 }
 
 internal data class Batch(val events: List<RawLogEvent>, val eof: Boolean)
-private fun jitter(duration: Duration): Duration = duration + JITTER * Math.random()

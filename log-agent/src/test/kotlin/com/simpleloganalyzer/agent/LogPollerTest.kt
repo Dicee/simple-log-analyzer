@@ -6,6 +6,7 @@ import com.simpleloganalyzer.agent.config.DateConfig
 import com.simpleloganalyzer.agent.config.FilesConfig
 import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.agent.config.LogGroupConfig
+import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.agent.config.LogSection
 import com.simpleloganalyzer.agent.config.TransitConfig
 import com.simpleloganalyzer.commons.time.TickerClock
@@ -243,6 +244,30 @@ class LogPollerTest {
             assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
         }
 
+        @Test
+        fun testNextBatch_logBatchSizeReached_firstBatchIsFullAndSecondBatchIsPartialAtEof() = runTest {
+            val batchSize = 3
+            val poller = buildPoller(logPollerConfig = LogPollerConfig(logBatchSize = batchSize))
+
+            val tsPrefix = "2023-11-14 09:15:0"
+            val lines = (1..5).map { i -> LogFormat.JSON.line("$tsPrefix$i", "event $i") }
+            createFile("app.log.1", *lines.toTypedArray())
+            createFile("app.log.2") // newer file present, so the trailing partial batch flushes at EOF without waiting
+
+            val config = structuredConfig(LogFormat.JSON)
+            fun batchOf(range: IntRange): List<RawLogEvent> = range.map { i -> RawLogEvent(instant("$tsPrefix${i + 1}"), lines[i]) }
+
+            openReader("app.log.1").use { reader ->
+                val builder = poller.RawLogEventBuilder(config)
+
+                val fullBatch = poller.nextBatch(config, freq = 1.seconds, reader, builder)
+                assertThat(fullBatch).isEqualTo(Batch(events = batchOf(0 until batchSize), eof = false))
+
+                val partialBatch = poller.nextBatch(config, freq = 1.seconds, reader, builder)
+                assertThat(partialBatch).isEqualTo(Batch(batchOf(batchSize until lines.size), eof = true))
+            }
+        }
+
         private fun plainTextConfig() = logGroupConfig(format = LogFormat.PLAIN_TEXT, date = DateConfig(format = TS_FORMAT))
 
         // Structured formats parse the timestamp from the default "timestamp" field, using the shared zoneless pattern.
@@ -428,10 +453,12 @@ class LogPollerTest {
         configs: Map<String, LogGroupConfig> = emptyMap(),
         client: LogIngestionServiceClient = DummyLogIngestionServiceClient(),
         helper: LogPollerHelper = LogPollerHelper(virtualClock()),
+        logPollerConfig: LogPollerConfig = LogPollerConfig(),
     ): LogPoller {
         val dispatcher = StandardTestDispatcher(testScheduler)
         return LogPoller(
             logGroupConfigs = configs,
+            pollerConfig = logPollerConfig,
             ingestionServiceClient = client,
             clock = virtualClock(),
             helper = helper,
