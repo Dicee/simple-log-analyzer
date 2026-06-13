@@ -151,13 +151,13 @@ class LogPollerHelperTest {
     @EnumSource(LogFormat::class)
     fun testExtractEventTimestamp_allFormats_nothingConfigured_fallsBackToNow(logFormat: LogFormat) {
         val result = helper.extractEventTimestamp("hello world", logFormat, DateConfig())
-        assertThat(result).isEqualTo(now)
+        assertThat(result).isNull()
     }
 
     @Test
     fun testExtractEventTimestamp_plainText_noDateFormat_returnsNow() {
         val result = helper.extractEventTimestamp("some log line", LogFormat.PLAIN_TEXT, DateConfig())
-        assertThat(result).isEqualTo(now)
+        assertThat(result).isNull()
     }
 
     @ParameterizedTest
@@ -170,7 +170,7 @@ class LogPollerHelperTest {
     @Test
     fun testExtractEventTimestamp_plainText_parseFailure_fallsBackToNow() {
         val result = helper.extractEventTimestamp("not a timestamp", LogFormat.PLAIN_TEXT, DateConfig(format = DATE_FORMAT_NO_TZ))
-        assertThat(result).isEqualTo(now)
+        assertThat(result).isNull()
     }
 
     @Test
@@ -198,21 +198,21 @@ class LogPollerHelperTest {
     fun testExtractEventTimestamp_json_fieldNotFound_fallsBackToNow() {
         val raw = """{"message":"hello"}"""
         val result = helper.extractEventTimestamp(raw, LogFormat.JSON, DateConfig(field = "ts", format = DATE_FORMAT_NO_TZ))
-        assertThat(result).isEqualTo(now)
+        assertThat(result).isNull()
     }
 
     @Test
     fun testExtractEventTimestamp_json_parseFailure_fallsBackToNow() {
         val raw = """{"ts":"not-a-date","message":"hello"}"""
         val result = helper.extractEventTimestamp(raw, LogFormat.JSON, DateConfig(field = "ts", format = DATE_FORMAT_NO_TZ))
-        assertThat(result).isEqualTo(now)
+        assertThat(result).isNull()
     }
 
     @Test
     fun testExtractEventTimestamp_json_multipleMatchesDueToNestedObject_fallsBackToNow() {
         val raw = """{"outer":{"ts":"2023-11-14 12:00:00"},"ts":"2023-11-14 12:00:00"}"""
         val result = helper.extractEventTimestamp(raw, LogFormat.JSON, DateConfig(field = "ts", format = DATE_FORMAT_NO_TZ))
-        assertThat(result).isEqualTo(now)
+        assertThat(result).isNull()
     }
 
     @Test
@@ -240,14 +240,14 @@ class LogPollerHelperTest {
     fun testExtractEventTimestamp_logfmt_fieldNotFound_fallsBackToNow() {
         val raw = "level=info message=hello"
         val result = helper.extractEventTimestamp(raw, LogFormat.LOGFMT, DateConfig(field = "ts", format = DATE_FORMAT_NO_TZ))
-        assertThat(result).isEqualTo(now)
+        assertThat(result).isNull()
     }
 
     @Test
     fun testExtractEventTimestamp_logfmt_parseFailure_fallsBackToNow() {
         val raw = "ts=not-a-date message=hello"
         val result = helper.extractEventTimestamp(raw, LogFormat.LOGFMT, DateConfig(field = "ts", format = DATE_FORMAT_NO_TZ))
-        assertThat(result).isEqualTo(now)
+        assertThat(result).isNull()
     }
 
     companion object {

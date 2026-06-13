@@ -25,6 +25,7 @@ data class RawLogEvent(
 )
 
 class DummyLogIngestionServiceClient : LogIngestionServiceClient {
+    private val lock = Any()
     private val publishedEvents = mutableMapOf<String, MutableList<RawLogEvent>>()
 
     override fun publishLogs(logGroupName: String, payload: ByteArray, compressionMode: CompressionMode) {
@@ -35,11 +36,15 @@ class DummyLogIngestionServiceClient : LogIngestionServiceClient {
             }
         }
         val events = Json.decodeFromString<List<RawLogEvent>>(json)
-        publishedEvents.getOrPut(logGroupName) { mutableListOf() }.addAll(events)
+        synchronized(lock) {
+            publishedEvents.getOrPut(logGroupName) { mutableListOf() }.addAll(events)
+        }
     }
 
     /** All events published for [logGroupName], in publication order. */
-    fun eventsFor(logGroupName: String): List<RawLogEvent> = publishedEvents[logGroupName].orEmpty()
+    fun eventsFor(logGroupName: String): List<RawLogEvent> = synchronized(lock) {
+        publishedEvents[logGroupName].orEmpty().toList()
+    }
 
     /**
      * Textual view of [eventsFor], one event per line formatted as `<ISO-8601 timestamp>|<message>`. Kept for future

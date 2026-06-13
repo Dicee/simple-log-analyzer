@@ -31,9 +31,13 @@ import java.io.BufferedReader
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import kotlin.time.toKotlinInstant
 
 @ExperimentalCoroutinesApi
 @OptIn(ExperimentalTime::class)
@@ -41,6 +45,8 @@ class LogPollerTest {
     private companion object {
         const val GROUP = "my-group"
         const val MAX_PENDING_FILES = 10
+        const val TS_FORMAT = "yyyy-MM-dd HH:mm:ss"
+        val FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern(TS_FORMAT)
         val FIXED_TIMESTAMP = Instant.fromEpochMilliseconds(0)
     }
 
@@ -51,47 +57,185 @@ class LogPollerTest {
      */
     @Nested
     inner class NextBatchOnly {
-        @Test
-        fun testNextBatch_singleActiveFileReachesEof_flushesAccumulatedBatchOnceMaxPutDelayElapses() = runTest {
+        // For JSON and logfmt every line is a self-contained event whose timestamp is parsed from a field, so these
+        // structured formats exercise batching/EOF/rotation while keeping per-line timestamps distinct (parsed from the
+        // line content, no clock control needed). Plain-text multi-line assembly is covered separately below.
+        @ParameterizedTest
+        @EnumSource(value = LogFormat::class, names = ["JSON", "LOGFMT"])
+        fun testNextBatch_structuredSingleActiveFileReachesEof_flushesAllEventsOnceMaxPutDelayElapses(format: LogFormat) = runTest {
             val poller = buildPoller()
-            createFile("app.log", "alpha", "beta", "gamma")
+            val lines = listOf(
+                format.line("2023-11-14 09:15:00", "service started"),
+                format.line("2023-11-14 09:15:02", "request received"),
+                format.line("2023-11-14 09:15:03", "request completed"),
+            )
+            createFile("app.log", *lines.toTypedArray())
 
+            val config = structuredConfig(format)
             val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(logGroupConfig(), freq = 1.seconds, reader)
+                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch.map { it.message }).containsExactly("alpha", "beta", "gamma")
-            // No newer file exists, so the batch is held open until exactly maxPutDelay of virtual time has elapsed
+            assertThat(batch).containsExactly(
+                RawLogEvent(instant("2023-11-14 09:15:00"), lines[0]),
+                RawLogEvent(instant("2023-11-14 09:15:02"), lines[1]),
+                RawLogEvent(instant("2023-11-14 09:15:03"), lines[2]),
+            )
+            // No newer file exists, so the batch is held open until exactly maxPutDelay of virtual time has elapsed.
             assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
         }
 
-        @Test
-        fun testNextBatch_newerFileAvailableAtEof_flushesImmediatelyWithoutWaitingForMaxPutDelay() = runTest {
+        @ParameterizedTest
+        @EnumSource(value = LogFormat::class, names = ["JSON", "LOGFMT"])
+        fun testNextBatch_structuredNewerFileAvailableAtEof_flushesImmediatelyWithoutWaitingForMaxPutDelay(format: LogFormat) = runTest {
             val poller = buildPoller()
-            createFile("app.log.1", "one", "two") // head being tailed
+            val lines = listOf(
+                format.line("2023-11-14 09:15:00", "connection opened"),
+                format.line("2023-11-14 09:15:01", "connection closed"),
+            )
+            createFile("app.log.1", *lines.toTypedArray()) // head being tailed
             createFile("app.log.2") // a newer file already exists, signalling rotation
 
+            val config = structuredConfig(format)
             val batch = openReader("app.log.1").use { reader ->
-                poller.nextBatch(logGroupConfig(), freq = 1.seconds, reader)
+                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch.map { it.message }).containsExactly("one", "two")
-            // Rotation was detected at EOF, so we flush right away rather than waiting out maxPutDelay
+            assertThat(batch).containsExactly(
+                RawLogEvent(instant("2023-11-14 09:15:00"), lines[0]),
+                RawLogEvent(instant("2023-11-14 09:15:01"), lines[1]),
+            )
+            // Rotation was detected at EOF, so we flush right away rather than waiting out maxPutDelay.
             assertThat(testScheduler.currentTime).isZero()
         }
 
-        @Test
-        fun testNextBatch_emptyHeadWithNewerFileAvailable_returnsEmptyBatch() = runTest {
+        @ParameterizedTest
+        @EnumSource(value = LogFormat::class, names = ["JSON", "LOGFMT"])
+        fun testNextBatch_structuredEmptyHeadWithNewerFileAvailable_returnsEmptyBatch(format: LogFormat) = runTest {
             val poller = buildPoller()
             createFile("app.log.1") // empty head, fully consumed
             createFile("app.log.2") // newer file present
 
+            val config = structuredConfig(format)
             val batch = openReader("app.log.1").use { reader ->
-                poller.nextBatch(logGroupConfig(), freq = 1.seconds, reader)
+                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
             }
 
             assertThat(batch).isEmpty()
             assertThat(testScheduler.currentTime).isZero()
+        }
+
+        @Test
+        fun testNextBatch_plainText_singleLine_withoutTimestamp() = runTest {
+            val poller = buildPoller()
+            createFile("app.log", "no timestamp here")
+
+            val config = plainTextConfig()
+            val batch = openReader("app.log").use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+            }
+
+            assertThat(batch).containsExactly(RawLogEvent(FIXED_TIMESTAMP, "no timestamp here"))
+        }
+
+        @Test
+        fun testNextBatch_plainText_singleLine_withTimestamp_flushedByMaxPutDelayTimeout() = runTest {
+            val poller = buildPoller()
+            createFile("app.log", "2023-01-01 00:00:00 hello")
+
+            val config = plainTextConfig()
+            val batch = openReader("app.log").use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+            }
+
+            // The timestamped line opens an event; with no successor file it is only finalized once maxPutDelay elapses.
+            assertThat(batch).containsExactly(RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 hello"))
+            assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
+        }
+
+        @Test
+        fun testNextBatch_plainText_singleLine_withTimestamp_flushedByEofRotation() = runTest {
+            val poller = buildPoller()
+            createFile("app.log.1", "2023-01-01 00:00:00 hello")
+            createFile("app.log.2") // newer file present, signalling rotation
+
+            val config = plainTextConfig()
+            val batch = openReader("app.log.1").use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+            }
+
+            // Rotation finalizes the open event right away, without waiting out maxPutDelay.
+            assertThat(batch).containsExactly(RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 hello"))
+            assertThat(testScheduler.currentTime).isZero()
+        }
+
+        @Test
+        fun testNextBatch_plainText_singleMultiLineEvent_flushedByMaxPutDelayTimeout() = runTest {
+            val poller = buildPoller()
+            val lines = arrayOf("2023-01-01 00:00:00 boom", "  at Foo.bar(Foo.kt:1)", "  at Baz.qux(Baz.kt:2)")
+            createFile("app.log", *lines)
+
+            val config = plainTextConfig()
+            val batch = openReader("app.log").use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+            }
+
+            assertThat(batch).containsExactly(RawLogEvent(instant("2023-01-01 00:00:00"), lines.joinToString("\n")))
+            assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
+        }
+
+        @Test
+        fun testNextBatch_plainText_singleMultiLineEvent_flushedByEofRotation() = runTest {
+            val poller = buildPoller()
+            val lines = arrayOf("2023-01-01 00:00:00 boom", "  at Foo.bar(Foo.kt:1)", "  at Baz.qux(Baz.kt:2)")
+            createFile("app.log.1", *lines)
+            createFile("app.log.2") // newer file present, signalling rotation
+
+            val config = plainTextConfig()
+            val batch = openReader("app.log.1").use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+            }
+
+            assertThat(batch).containsExactly(RawLogEvent(instant("2023-01-01 00:00:00"), lines.joinToString("\n")))
+            assertThat(testScheduler.currentTime).isZero()
+        }
+
+        @Test
+        fun testNextBatch_plainTextMixtureOfEventShapes_assemblesEachEventAndFlushesTheTrailingOne() = runTest {
+            val poller = buildPoller()
+            createFile(
+                "app.log",
+                "preamble without timestamp", // standalone single-line event
+                "2023-01-01 00:00:00 boom", // opens a multi-line event...
+                "  at Foo.bar(Foo.kt:1)", // ...continuation folded into it
+                "2023-01-01 00:00:05 single", // new timestamp finalizes the previous event and opens its own
+                "2023-01-01 00:00:10 trailing", // another new timestamp; this one is left open until flush
+            )
+
+            val config = plainTextConfig()
+            val batch = openReader("app.log").use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+            }
+
+            assertThat(batch).containsExactly(
+                RawLogEvent(FIXED_TIMESTAMP, "preamble without timestamp"),
+                RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 boom\n  at Foo.bar(Foo.kt:1)"),
+                RawLogEvent(instant("2023-01-01 00:00:05"), "2023-01-01 00:00:05 single"),
+                RawLogEvent(instant("2023-01-01 00:00:10"), "2023-01-01 00:00:10 trailing"),
+            )
+            assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
+        }
+
+        private fun plainTextConfig() = logGroupConfig(format = LogFormat.PLAIN_TEXT, date = DateConfig(format = TS_FORMAT))
+
+        // Structured formats parse the timestamp from the default "timestamp" field, using the shared zoneless pattern.
+        private fun structuredConfig(format: LogFormat) = logGroupConfig(format = format, date = DateConfig(format = TS_FORMAT))
+
+        // Renders one event as a single realistic line in the given structured format, carrying a parseable "timestamp" field.
+        private fun LogFormat.line(timestamp: String, message: String): String = when (this) {
+            LogFormat.JSON -> "{\"timestamp\":\"$timestamp\",\"message\":\"$message\"}"
+            LogFormat.LOGFMT -> "timestamp=\"$timestamp\" message=\"$message\""
+            LogFormat.PLAIN_TEXT -> error("line(...) is only meaningful for structured formats")
         }
     }
 
@@ -280,9 +424,15 @@ class LogPollerTest {
         )
     }
 
-    private fun logGroupConfig(compression: CompressionMode = CompressionMode.GZIP) = LogGroupConfig(
+    private fun logGroupConfig(
+        compression: CompressionMode = CompressionMode.GZIP,
+        format: LogFormat = LogFormat.PLAIN_TEXT,
+        date: DateConfig = DateConfig(),
+    ) = LogGroupConfig(
         LogSection(
             files = FilesConfig(root = tempDir.toString(), glob = "app.log*"),
+            format = format,
+            date = date,
             transit = TransitConfig(compression),
         ),
     )
@@ -297,4 +447,6 @@ class LogPollerTest {
     }
 
     private fun openReader(name: String): BufferedReader = tempDir.resolve(name).toFile().bufferedReader()
+
+    private fun instant(dateTime: String) = LocalDateTime.parse(dateTime, FORMATTER).toInstant(ZoneOffset.UTC).toKotlinInstant()
 }

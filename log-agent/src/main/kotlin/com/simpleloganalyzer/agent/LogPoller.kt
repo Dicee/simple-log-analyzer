@@ -1,6 +1,7 @@
 package com.simpleloganalyzer.agent
 
 import com.simpleloganalyzer.agent.config.CompressionMode
+import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.agent.config.LogGroupConfig
 import com.simpleloganalyzer.commons.logging.log
 import com.simpleloganalyzer.commons.time.TickerClock
@@ -141,8 +142,10 @@ internal class LogPoller(
     ) {
         // TODO: handle IO exceptions (once we have checkpoints)
         path.toFile().bufferedReader().use { reader ->
+            val logEventBuilder = RawLogEventBuilder(config)
+
             while (currentCoroutineContext().isActive) {
-                val batch = nextBatch(config, freq, reader)
+                val batch = nextBatch(config, freq, reader, logEventBuilder)
                 if (batch.isEmpty()) break
 
                 collector.emit(batch)
@@ -151,25 +154,37 @@ internal class LogPoller(
     }
 
     @VisibleForTesting // just for allowing more detailed tests, but we also test end-to-end
-    internal suspend fun nextBatch(config: LogGroupConfig, freq: Duration, reader: BufferedReader): List<RawLogEvent> {
+    internal suspend fun nextBatch(
+        config: LogGroupConfig,
+        freq: Duration,
+        reader: BufferedReader,
+        logEventBuilder: RawLogEventBuilder,
+    ): List<RawLogEvent> {
         return buildList {
             var batchStartedAt: Instant? = null
 
             while (currentCoroutineContext().isActive) {
-                if (batchStartedAt != null && clock.now() - batchStartedAt >= config.log.maxPutDelay) break
+                if (batchStartedAt != null && clock.now() - batchStartedAt >= config.log.maxPutDelay) {
+                    // the batch has been open long enough: flush any in-progress multi-line event so we don't hold it past the latency bound
+                    logEventBuilder.flush()?.let { add(it) }
+                    break
+                }
 
                 val line = reader.readLine()
                 if (line == null) {
                     // note that the helper internally caches the value for a short amount of time, so we can afford looping on this
                     val files = helper.findMatchingFilesInOrder(config.log.files, maxPendingFilesPerLogGroup)
-                    if (files.size > 1) break // there's a next file, so we return an empty batch for this file
+                    if (files.size > 1) {
+                        // there's a next file, so we flush the ongoing log event if any, and return to activate rotation
+                        logEventBuilder.flush()?.let { add(it) }
+                        break
+                    }
                     delay(freq) // otherwise, we wait a bit because some new data might be written in the current file
                 } else {
                     if (batchStartedAt == null) batchStartedAt = clock.now()
 
-                    val timestamp = helper.extractEventTimestamp(line, config.log.format, config.log.date)
-                    // TODO: handle multi-line events for plain-text
-                    add(RawLogEvent(timestamp, line))
+                    val event = logEventBuilder.addLine(line)
+                    if (event != null) add(event)
 
                     if (size == LOG_BATCH_SIZE) break
                 }
@@ -181,6 +196,61 @@ internal class LogPoller(
     // No-op when loomIo is an injected dispatcher we don't own (e.g. a test dispatcher), which isn't an ExecutorCoroutineDispatcher.
     override fun close() {
         (loomDispatcher as? ExecutorCoroutineDispatcher)?.close()
+    }
+
+    /**
+     * Stateful builder which allows transparently building single or multi-line events depending on the log configuration. The builder's
+     * state follows a cyclic state machine, so that the builder can be reused to create a new object after it completed the creation of
+     * another. This allows carrying the state of partially consumed events when we had to flush a batch before reading the full event.
+     */
+    internal inner class RawLogEventBuilder(private val config: LogGroupConfig) {
+        private var timestamp: Instant? = null
+        private val lines: MutableList<String> = mutableListOf()
+
+        /**
+         * Returns the next event if ready, or null if it's still partial
+         */
+        fun addLine(line: String): RawLogEvent? {
+            val now = clock.now()
+            val format = config.log.format
+            val timestamp = helper.extractEventTimestamp(line, format, config.log.date)
+
+            // every line is an event for these formats
+            if (format != LogFormat.PLAIN_TEXT) return RawLogEvent(timestamp ?: now, line)
+
+            if (this.timestamp == null) {
+                // if there's no timestamp on the line, we assume it's a single-line event and assign a default timestamp
+                if (timestamp == null) return RawLogEvent(now, line)
+
+                this.timestamp = timestamp
+            } else if (timestamp != null) {
+                val event = doFlush(this.timestamp)
+
+                this.timestamp = timestamp
+                lines += line
+
+                return event
+            }
+
+            lines += line
+            return null
+        }
+
+        /**
+         * Flushes any pending content in a [RawLogEvent], or returns null if there is no pending content.
+         */
+        fun flush(): RawLogEvent? {
+            return if (timestamp != null) doFlush(timestamp) else null
+        }
+
+        private fun doFlush(timestamp: Instant?): RawLogEvent {
+            val event = RawLogEvent(timestamp!!, lines.joinToString("\n"))
+
+            this.timestamp = null
+            lines.clear()
+
+            return event
+        }
     }
 }
 

@@ -62,26 +62,25 @@ class LogPollerHelper(private val clock: TickerClock = SystemTickerClock) {
     }
 
     /**
-     * Extracts the event timestamp from a raw event, falling back to current time in the absence of proper configuration
+     * Extracts the event timestamp from a raw event, or null to current time in the absence of proper configuration
      * (timestamp field or date format), or in case of an exception during the extraction process.
      */
-    fun extractEventTimestamp(raw: String, format: LogFormat, config: DateConfig): Instant {
-        val now = clock.now()
-        if (config.field == null && config.format == null) return now
+    fun extractEventTimestamp(raw: String, format: LogFormat, config: DateConfig): Instant? {
+        if (config.field == null && config.format == null) return null
 
         return try {
             when (format) {
                 LogFormat.PLAIN_TEXT ->
-                    if (config.format != null) parseInstant(raw, config.format) else now
+                    if (config.format != null) parseInstant(raw, config.format) else null
 
                 LogFormat.JSON, LogFormat.LOGFMT -> {
                     val field = config.field ?: DEFAULT_TS_FIELD
-                    extractTimestampFromField(raw, format, field, config) ?: now
+                    extractTimestampFromField(raw, format, field, config)
                 }
             }
         } catch (e: RuntimeException) {
             log.warn("Failed to extract event timestamp, falling back to current time", e)
-            now
+            null
         }
     }
 
