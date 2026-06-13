@@ -57,7 +57,7 @@ internal class LogPoller(
                     } catch (e: Exception) {
                         // TODO: in the first version without checkpoints, we accept duplication, and simply restart the ingestion
                         // TODO: from the head file, first line.
-                        val backoff = jitter(pollerConfig.jitter)
+                        val backoff = jitter(pollerConfig.restartBackoff)
                         log.error("Log group '$logGroupName' pipeline failed, restarting in $backoff", e)
                         delay(backoff)
                     }
