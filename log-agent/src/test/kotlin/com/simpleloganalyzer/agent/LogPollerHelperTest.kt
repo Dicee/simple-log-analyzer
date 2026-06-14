@@ -254,6 +254,26 @@ class LogPollerHelperTest {
         assertThat(result).isNull()
     }
 
+    @Test
+    fun testArchive_movesFileToArchivedLogsAndInvalidatesListingCache() {
+        val filesConfig = config("app.log*")
+        val file = createFile("app.log.1")
+        createFile("app.log.2")
+
+        // Prime the cache so we can verify invalidation
+        val beforeArchive = helper.findMatchingFilesInOrder(filesConfig)
+        assertThatFileNames(beforeArchive).containsExactly("app.log.1", "app.log.2")
+
+        helper.archive(file, filesConfig)
+
+        assertThat(tempDir.resolve("app.log.1")).doesNotExist()
+        assertThat(tempDir.resolve("archived-logs/app.log.1")).exists()
+
+        // Listing cache was invalidated: the next call reflects the moved file without waiting for expiry
+        val afterArchive = helper.findMatchingFilesInOrder(filesConfig)
+        assertThatFileNames(afterArchive).containsExactly("app.log.2")
+    }
+
     companion object {
         private const val EPOCH_MS_2023_11_14_NOON_UTC = 1699963200000L
         private const val EPOCH_MS_2023_11_14_NOON_PLUS0200 = 1699956000000L // 10:00 UTC

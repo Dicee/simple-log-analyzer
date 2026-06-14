@@ -4,9 +4,12 @@
 - check`java.nio.file.WatchService`
 - log poller implementation
 	- add end-to-end tests (only ingestion service mocked)
-- parse config in CLI 
+- parse config in CLI
+- use injection to manage dependencies
 
 # Done
+- address remaining TODOs in the `LogPoller
+- add checkpointing support in the `LogPoller`
 - log poller implementation
   - implement a good retry strategy
   - add unit tests

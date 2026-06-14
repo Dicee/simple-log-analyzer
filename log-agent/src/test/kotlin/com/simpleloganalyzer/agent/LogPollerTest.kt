@@ -10,6 +10,8 @@ import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.agent.config.LogSection
 import com.simpleloganalyzer.agent.config.TransitConfig
 import com.simpleloganalyzer.commons.time.TickerClock
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
@@ -22,6 +24,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.ExperimentalSerializationApi
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -41,7 +44,7 @@ import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
 
 @ExperimentalCoroutinesApi
-@OptIn(ExperimentalTime::class)
+@OptIn(ExperimentalTime::class, ExperimentalSerializationApi::class)
 class LogPollerTest {
     private companion object {
         const val GROUP = "my-group"
@@ -73,10 +76,10 @@ class LogPollerTest {
 
             val config = structuredConfig(format)
             val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log"), reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).isEqualTo(Batch(
+            assertThat(batch).isEqualTo(ReadBatch(
                 events = listOf(
                     RawLogEvent(instant("2023-11-14 09:15:00"), lines[0]),
                     RawLogEvent(instant("2023-11-14 09:15:02"), lines[1]),
@@ -101,10 +104,10 @@ class LogPollerTest {
 
             val config = structuredConfig(format)
             val batch = openReader("app.log.1").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log.1"), reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).isEqualTo(Batch(
+            assertThat(batch).isEqualTo(ReadBatch(
                 events = listOf(
                     RawLogEvent(instant("2023-11-14 09:15:00"), lines[0]),
                     RawLogEvent(instant("2023-11-14 09:15:01"), lines[1]),
@@ -124,10 +127,10 @@ class LogPollerTest {
 
             val config = structuredConfig(format)
             val batch = openReader("app.log.1").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log.1"), reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).isEqualTo(Batch(listOf(), true))
+            assertThat(batch).isEqualTo(ReadBatch(listOf(), true))
             assertThat(testScheduler.currentTime).isZero()
         }
 
@@ -138,10 +141,10 @@ class LogPollerTest {
 
             val config = plainTextConfig()
             val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log"), reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).isEqualTo(Batch(
+            assertThat(batch).isEqualTo(ReadBatch(
                 events = listOf(RawLogEvent(FIXED_TIMESTAMP, "no timestamp here")),
                 eof = false
             ))
@@ -154,11 +157,11 @@ class LogPollerTest {
 
             val config = plainTextConfig()
             val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log"), reader, poller.RawLogEventBuilder(config))
             }
 
             // The timestamped line opens an event; with no successor file it is only finalized once maxPutDelay elapses.
-            assertThat(batch).isEqualTo(Batch(
+            assertThat(batch).isEqualTo(ReadBatch(
                 events = listOf(RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 hello")),
                     eof = false
             ))
@@ -173,12 +176,12 @@ class LogPollerTest {
 
             val config = plainTextConfig()
             val batch = openReader("app.log.1").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log.1"), reader, poller.RawLogEventBuilder(config))
             }
 
             // Rotation finalizes the open event right away, without waiting out maxPutDelay.
             val expectedEvent = RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 hello")
-            assertThat(batch).isEqualTo(Batch(events = listOf(expectedEvent), eof = true))
+            assertThat(batch).isEqualTo(ReadBatch(events = listOf(expectedEvent), eof = true))
             assertThat(testScheduler.currentTime).isZero()
         }
 
@@ -190,11 +193,11 @@ class LogPollerTest {
 
             val config = plainTextConfig()
             val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log"), reader, poller.RawLogEventBuilder(config))
             }
 
             val expectedEvent = RawLogEvent(instant("2023-01-01 00:00:00"), lines.joinToString("\n"))
-            assertThat(batch).isEqualTo(Batch(events = listOf(expectedEvent), eof = false))
+            assertThat(batch).isEqualTo(ReadBatch(events = listOf(expectedEvent), eof = false))
             assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
         }
 
@@ -207,11 +210,11 @@ class LogPollerTest {
 
             val config = plainTextConfig()
             val batch = openReader("app.log.1").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log.1"), reader, poller.RawLogEventBuilder(config))
             }
 
-            val expectedEVent = RawLogEvent(instant("2023-01-01 00:00:00"), lines.joinToString("\n"))
-            assertThat(batch).isEqualTo(Batch(events = listOf(expectedEVent), eof = true))
+            val expectedEvent = RawLogEvent(instant("2023-01-01 00:00:00"), lines.joinToString("\n"))
+            assertThat(batch).isEqualTo(ReadBatch(events = listOf(expectedEvent), eof = true))
             assertThat(testScheduler.currentTime).isZero()
         }
 
@@ -229,10 +232,10 @@ class LogPollerTest {
 
             val config = plainTextConfig()
             val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, reader, poller.RawLogEventBuilder(config))
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log"), reader, poller.RawLogEventBuilder(config))
             }
 
-            assertThat(batch).isEqualTo(Batch(
+            assertThat(batch).isEqualTo(ReadBatch(
                 events = listOf(
                     RawLogEvent(FIXED_TIMESTAMP, "preamble without timestamp"),
                     RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 boom\n  at Foo.bar(Foo.kt:1)"),
@@ -259,12 +262,13 @@ class LogPollerTest {
 
             openReader("app.log.1").use { reader ->
                 val builder = poller.RawLogEventBuilder(config)
+                val path = tempDir.resolve("app.log.1")
 
-                val fullBatch = poller.nextBatch(config, freq = 1.seconds, reader, builder)
-                assertThat(fullBatch).isEqualTo(Batch(events = batchOf(0 until batchSize), eof = false))
+                val fullBatch = poller.nextBatch(config, freq = 1.seconds, path, reader, builder)
+                assertThat(fullBatch).isEqualTo(ReadBatch(events = batchOf(0 until batchSize), eof = false))
 
-                val partialBatch = poller.nextBatch(config, freq = 1.seconds, reader, builder)
-                assertThat(partialBatch).isEqualTo(Batch(batchOf(batchSize until lines.size), eof = true))
+                val partialBatch = poller.nextBatch(config, freq = 1.seconds, path, reader, builder)
+                assertThat(partialBatch).isEqualTo(ReadBatch(batchOf(batchSize until lines.size), eof = true))
             }
         }
 
@@ -288,9 +292,8 @@ class LogPollerTest {
      */
     @Nested
     inner class EndToEndMocked {
-        // Mocking only the discovery helper lets us steer rotation/error scenarios while exercising the real tailing,
-        // serialization, archiving and publishing code paths. relaxUnitFun auto-stubs invalidateListingCache.
-        private val helper = mockk<LogPollerHelper>(relaxUnitFun = true)
+        private val helper = mockk<LogPollerHelper>()
+        private val checkpointer = mockk<Checkpointer>()
         private val client = spyk(DummyLogIngestionServiceClient())
 
         /**
@@ -306,8 +309,9 @@ class LogPollerTest {
             val filesConfig = configs.getValue(GROUP).log.files
             stubLiveFileListing(filesConfig)
             stubFixedTimestamp()
+            stubCheckpointer(filesConfig)
 
-            val poller = buildPoller(configs, client, helper)
+            val poller = buildPoller(configs, client, helper, checkpointer)
             poller.start(backgroundScope)
 
             // No file initially; the head file (app.log.1) appears after 10 virtual seconds...
@@ -333,14 +337,10 @@ class LogPollerTest {
                 RawLogEvent(FIXED_TIMESTAMP, "fileb-line1"),
             )
 
-            // The head file was superseded by app.log.2, so it is moved into archived-logs and its name is preserved.
-            assertThat(tempDir.resolve("app.log.1")).doesNotExist()
-            assertThat(tempDir.resolve("archived-logs").resolve("app.log.1")).exists()
-            // The trailing file has no successor, so it keeps being tailed and is never rotated.
-            assertThat(tempDir.resolve("app.log.2")).exists()
-
-            // Exactly one rotation happened, so the cache is invalidated exactly once, for this group's files config.
-            verify(exactly = 1) { helper.invalidateListingCache(filesConfig) }
+            // The head file was archived via checkpointer commit with eof=true.
+            verify(exactly = 1) { checkpointer.commit(GROUP, filesConfig, tempDir.resolve("app.log.1"), any(), eof = true) }
+            // The trailing file has no successor and was committed without eof.
+            verify { checkpointer.commit(GROUP, filesConfig, tempDir.resolve("app.log.2"), any(), eof = false) }
         }
 
         /**
@@ -348,7 +348,7 @@ class LogPollerTest {
          * the data lands exactly once with no duplication, after exactly three publish attempts.
          */
         @Test
-        fun testStart_publishFailsTwiceThenSucceeds_resendsSameBatchWithoutDuplicates() = runTest {
+        fun testStart_publishFailsTwiceThenSucceeds_resendsSameBatchWithoutDuplicatesAndCommitsOnce() = runTest {
             // First two attempts blow up; the third (and any later) call records the batch for real. Only the
             // serialized payload varies, so the group name and compression mode are matched exactly.
             every { client.publishLogs(GROUP, any(), CompressionMode.NONE) }
@@ -360,9 +360,10 @@ class LogPollerTest {
             val filesConfig = configs.getValue(GROUP).log.files
             stubLiveFileListing(filesConfig)
             stubFixedTimestamp()
+            stubCheckpointer(filesConfig)
             createFile("app.log.1", "line1", "line2", "line3")
 
-            val poller = buildPoller(configs, client, helper)
+            val poller = buildPoller(configs, client, helper, checkpointer)
             poller.start(backgroundScope)
 
             advanceTimeBy(120.seconds)
@@ -375,18 +376,21 @@ class LogPollerTest {
                 RawLogEvent(FIXED_TIMESTAMP, "line2"),
                 RawLogEvent(FIXED_TIMESTAMP, "line3"),
             )
+
+            // Commit happens only once, after the successful publish — not on each retry attempt.
+            verify(exactly = 1) { checkpointer.commit(GROUP, filesConfig, tempDir.resolve("app.log.1"), any(), eof = false) }
         }
 
         /**
-         * File discovery throws once, after the head file has already had a batch published. Without checkpoints, v1
-         * recovers by restarting the pipeline from the head file's first line, which re-sends the already-published
-         * lines. We assert that the restart happens and that it produces exactly that documented duplication.
+         * File discovery throws once, after the head file has already had a batch published. The pipeline restarts,
+         * but checkpointing ensures it resumes from the committed offset rather than re-reading from the start.
          */
         @Test
-        fun testStart_fileListingThrowsAfterFirstBatch_restartsAndReprocessesHeadFileWithDuplication() = runTest {
+        fun testStart_fileListingThrowsAfterFirstBatch_restartsFromCheckpointWithoutDuplication() = runTest {
             val configs = configFor(CompressionMode.NONE)
             val filesConfig = configs.getValue(GROUP).log.files
             stubFixedTimestamp()
+            stubCheckpointer(filesConfig)
 
             val headFile = createFile("app.log.1", "line1", "line2")
             var hasThrown = false
@@ -400,18 +404,16 @@ class LogPollerTest {
                 listOf(headFile)
             }
 
-            val poller = buildPoller(configs, client, helper)
+            val poller = buildPoller(configs, client, helper, checkpointer)
             poller.start(backgroundScope)
 
-            // Enough for: first flush -> failure -> restart backoff -> second flush.
+            // Enough for: first flush -> failure -> restart backoff -> resumed tailing from checkpoint.
             advanceTimeBy(200.seconds)
             runCurrent()
 
             assertThat(hasThrown).isTrue()
-            // The head file is reopened from the start after the restart, re-sending line1/line2 (accepted v1 duplication).
+            // checkpointing prevents duplication: the restart resumes past the already-committed batch.
             assertThat(client.eventsFor(GROUP)).containsExactly(
-                RawLogEvent(FIXED_TIMESTAMP, "line1"),
-                RawLogEvent(FIXED_TIMESTAMP, "line2"),
                 RawLogEvent(FIXED_TIMESTAMP, "line1"),
                 RawLogEvent(FIXED_TIMESTAMP, "line2"),
             )
@@ -425,9 +427,39 @@ class LogPollerTest {
             every { helper.findMatchingFilesInOrder(filesConfig) } answers { listMatchingFiles() }
         }
 
-        // Only the raw line varies; the plain-text format and (empty) date config are fixed by the log group config.
         private fun stubFixedTimestamp() {
             every { helper.extractEventTimestamp(any(), LogFormat.PLAIN_TEXT, DateConfig(), any()) } returns FIXED_TIMESTAMP
+        }
+
+        private fun stubCheckpointer(filesConfig: FilesConfig) {
+            var lastCheckpoint: Checkpoint? = null
+
+            every { checkpointer.getCheckpoint(GROUP, filesConfig, any()) } answers {
+                val sortedFiles = thirdArg<List<Path>>()
+                val head = sortedFiles[0]
+                if (lastCheckpoint != null && lastCheckpoint!!.path == head) {
+                    lastCheckpoint!!
+                } else {
+                    Checkpoint(fileKey = null, path = head, byteOffset = 0)
+                }
+            }
+            every { checkpointer.commit(GROUP, filesConfig, any(), any(), any()) } answers {
+                val origin = thirdArg<Path>()
+                val byteOffsetInc = arg<Long>(3)
+                val eof = arg<Boolean>(4)
+                val current = lastCheckpoint
+                lastCheckpoint = if (current != null && current.path == origin) {
+                    current.incOffset(byteOffsetInc)
+                } else {
+                    Checkpoint(fileKey = null, path = origin, byteOffset = byteOffsetInc)
+                }
+                if (eof) {
+                    val archivedDir = origin.parent.resolve("archived-logs")
+                    Files.createDirectories(archivedDir)
+                    Files.move(origin, archivedDir.resolve(origin.fileName))
+                }
+                lastCheckpoint
+            }
         }
 
         private fun listMatchingFiles(): List<Path> =
@@ -453,6 +485,7 @@ class LogPollerTest {
         configs: Map<String, LogGroupConfig> = emptyMap(),
         client: LogIngestionServiceClient = DummyLogIngestionServiceClient(),
         helper: LogPollerHelper = LogPollerHelper(virtualClock()),
+        checkpointer: Checkpointer = Checkpointer(configs.keys, helper),
         logPollerConfig: LogPollerConfig = LogPollerConfig(),
     ): LogPoller {
         val dispatcher = StandardTestDispatcher(testScheduler)
@@ -462,6 +495,7 @@ class LogPollerTest {
             ingestionServiceClient = client,
             clock = virtualClock(),
             helper = helper,
+            checkpointer = checkpointer,
             cpuDispatcher = dispatcher,
             loomDispatcher = dispatcher,
         )

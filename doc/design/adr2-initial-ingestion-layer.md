@@ -148,7 +148,7 @@ A checkpoint records where the poller should resume, but the files on disk may h
 - **Checkpoint inode is still the active file, but its size < offset**: the file was truncated or replaced in place (e.g. an application that reopens and truncates instead of rotating). The offset is stale, so resume from offset 0. Note we deliberately do not guard against inode reuse (a deleted file's inode being reassigned to an unrelated new file): the simplest correct behaviour here is the same — treat it as a fresh file and resume from 0. The cost is at worst re-reading a small file, which is acceptable given at-least-once semantics.
 - **Checkpoint inode is no longer the active file (rotation occurred)**: the inode we were reading has been renamed (e.g. `application.log` → `application.log.1`). The poller must first finish draining that rotated inode from `offset` to its EOF, then switch to the new active file and start at offset 0. This is the case a path/name-based loop would silently skip, losing the unread tail.
 - **Checkpoint inode is gone entirely (rotated and already deleted or compressed before we caught up)**: the tail is unrecoverable. Resume from the current active file at offset 0 and increment a "dropped due to rotation" counter so the gap is observable rather than silent.
-- **No checkpoint (first run)**: start tailing the active file from its current EOF, so we ingest logs going forward rather than replaying the entire pre-existing file.
+- **No checkpoint (first run)**: start tailing the active file from its start
 
 The inode is the join key that makes truncation and rotation distinguishable from one another — information a path-based approach does not have.
 

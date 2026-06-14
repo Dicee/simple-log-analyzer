@@ -7,6 +7,7 @@ import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.serialization.ExperimentalSerializationApi
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.util.concurrent.Executors
@@ -20,6 +21,7 @@ private const val PROP_MAX_FILES = "poller.maxPendingFilesPerLogGroup"
 val loomIo: CoroutineDispatcher = Executors.newVirtualThreadPerTaskExecutor()
         .asCoroutineDispatcher()
 
+@ExperimentalSerializationApi
 @ExperimentalTime
 fun main() {
     val maxFiles = parseMaxFiles()

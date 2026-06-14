@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.ExperimentalSerializationApi
 import org.assertj.core.api.SoftAssertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -42,6 +43,7 @@ import kotlin.time.ExperimentalTime
  * application writing to its log file, and rotation is triggered the way it would happen in production: by creating
  * a successor file in the same directory. The three groups run in parallel to exercise concurrent pipelines.
  */
+@ExperimentalSerializationApi
 @OptIn(ExperimentalTime::class)
 class LogPollerEndToEndTest {
     private companion object {

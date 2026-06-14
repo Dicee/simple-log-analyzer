@@ -9,6 +9,7 @@ import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.commons.logging.log
 import com.simpleloganalyzer.commons.time.SystemTickerClock
 import com.simpleloganalyzer.commons.time.TickerClock
+import java.nio.file.Files
 import java.nio.file.Path
 import java.text.ParsePosition
 import java.time.LocalDateTime
@@ -18,6 +19,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalQueries.zone
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.isRegularFile
+import kotlin.io.path.name
 import kotlin.io.path.useDirectoryEntries
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -123,5 +125,15 @@ class LogPollerHelper(
             else LocalDateTime.from(parsed).atZone(ZoneId.of("UTC")).toInstant()
 
         return instant.toKotlinInstant()
+    }
+
+    fun archive(path: Path, filesConfig: FilesConfig) {
+        log.info("Archiving file with path ${path.toAbsolutePath()}")
+
+        val archivedLogsDir = filesConfig.rootPath.resolve("archived-logs")
+        Files.createDirectories(archivedLogsDir)
+
+        Files.move(path, archivedLogsDir.resolve(path.name))
+        invalidateListingCache(filesConfig)
     }
 }
