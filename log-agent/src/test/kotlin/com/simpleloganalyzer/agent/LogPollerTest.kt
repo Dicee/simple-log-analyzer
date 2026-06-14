@@ -10,8 +10,6 @@ import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.agent.config.LogSection
 import com.simpleloganalyzer.agent.config.TransitConfig
 import com.simpleloganalyzer.commons.time.TickerClock
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
@@ -416,6 +414,35 @@ class LogPollerTest {
             assertThat(client.eventsFor(GROUP)).containsExactly(
                 RawLogEvent(FIXED_TIMESTAMP, "line1"),
                 RawLogEvent(FIXED_TIMESTAMP, "line2"),
+            )
+        }
+
+        @Test
+        fun testStart_resumesFromNonZeroCheckpointOffset_skipsAlreadyPublishedLines() = runTest {
+            val configs = configFor(CompressionMode.NONE)
+            val filesConfig = configs.getValue(GROUP).log.files
+            stubFixedTimestamp()
+
+            val alreadyCommittedBytes = "line1\nline2\n".toByteArray().size.toLong()
+            val incBytes = "line3\nline4\n".toByteArray().size.toLong()
+            val headFile = createFile("app.log.1", "line1", "line2", "line3", "line4")
+
+            every { helper.findMatchingFilesInOrder(filesConfig) } returns listOf(headFile)
+            every { checkpointer.getCheckpoint(GROUP, filesConfig, listOf(headFile)) } returns
+                Checkpoint(fileKey = null, path = headFile, byteOffset = alreadyCommittedBytes)
+
+            every { checkpointer.commit(GROUP, filesConfig, headFile, incBytes, eof = false) } returns
+                Checkpoint(fileKey = null, path = headFile, byteOffset = alreadyCommittedBytes + incBytes)
+
+            val poller = buildPoller(configs, client, helper, checkpointer)
+            poller.start(backgroundScope)
+
+            advanceTimeBy(200.seconds)
+            runCurrent()
+
+            assertThat(client.eventsFor(GROUP)).containsExactly(
+                RawLogEvent(FIXED_TIMESTAMP, "line3"),
+                RawLogEvent(FIXED_TIMESTAMP, "line4"),
             )
         }
 

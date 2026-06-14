@@ -86,11 +86,20 @@ internal class LogPoller(
             }
     }
 
-    private suspend fun publishWithRetries(
-        logGroupName: String,
-        batch: SerializedBatch,
-        compressionMode: CompressionMode
-    ) {
+    private fun serialize(batch: PrePublishBatch, compressionMode: CompressionMode): SerializedBatch {
+        val json = Json.encodeToString(batch.events).encodeToByteArray()
+        val payload = when (compressionMode) {
+            CompressionMode.NONE -> json
+            CompressionMode.GZIP -> ByteArrayOutputStream().also { out ->
+                GZIPOutputStream(out).use { it.write(json) }
+            }.toByteArray()
+        }
+        // ignoring Windows as a use-case, so counting 1 byte per line carriage should be true
+        val uncompressedBytesCount = batch.events.asSequence().map { it.message.toByteArray().size + 1L }.sum()
+        return SerializedBatch(batch.origin, uncompressedBytesCount, payload, batch.eof)
+    }
+
+    private suspend fun publishWithRetries(logGroupName: String, batch: SerializedBatch, compressionMode: CompressionMode) {
         var success = false
         var attempt = 0
 
@@ -109,19 +118,6 @@ internal class LogPoller(
                 attempt += 1
             }
         }
-    }
-
-    private fun serialize(batch: PrePublishBatch, compressionMode: CompressionMode): SerializedBatch {
-        val json = Json.encodeToString(batch.events).encodeToByteArray()
-        val payload = when (compressionMode) {
-            CompressionMode.NONE -> json
-            CompressionMode.GZIP -> ByteArrayOutputStream().also { out ->
-                GZIPOutputStream(out).use { it.write(json) }
-            }.toByteArray()
-        }
-        // ignoring Windows as a use-case, so counting 1 byte per line carriage should be true
-        val uncompressedBytesCount = batch.events.asSequence().map { it.message.toByteArray().size + 1L }.sum()
-        return SerializedBatch(batch.origin, uncompressedBytesCount, payload, batch.eof)
     }
 
     private fun tailLogGroup(logGroupName: String, config: LogGroupConfig): Flow<PrePublishBatch> = flow {
@@ -167,7 +163,7 @@ internal class LogPoller(
         }
     }
 
-    @VisibleForTesting
+    @VisibleForTesting // just for allowing more detailed tests, but we also test end-to-end
     internal suspend fun nextBatch(
         config: LogGroupConfig,
         freq: Duration,

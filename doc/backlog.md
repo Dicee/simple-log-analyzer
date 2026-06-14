@@ -6,6 +6,8 @@
 	- add end-to-end tests (only ingestion service mocked)
 - parse config in CLI
 - use injection to manage dependencies
+- when adding metrics, make sure we are ok with delivery semantics (should probably be able to switch from at-least-once to at-most-once ; unfortunately
+  I think exactly-once will be too complicated in edge cases)
 
 # Done
 - address remaining TODOs in the `LogPoller
