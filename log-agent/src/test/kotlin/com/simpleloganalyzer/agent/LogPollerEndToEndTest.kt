@@ -72,7 +72,7 @@ class LogPollerEndToEndTest {
     @Test
     @Timeout(value = 15, unit = TimeUnit.SECONDS)
     fun testStart_threeGroupsInParallel_allFormats(): Unit = runBlocking {
-        val client = DummyLogIngestionServiceClient()
+        val client = InMemoryIngestionServiceClient()
 
         val groupDirs = groups.associateWith { g ->
             val dir = Files.createDirectory(tempDir.resolve(g.name))

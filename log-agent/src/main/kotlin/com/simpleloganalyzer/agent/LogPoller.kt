@@ -67,6 +67,8 @@ internal class LogPoller(
     }
 
     private suspend fun runLogGroupPipeline(logGroupName: String, config: LogGroupConfig) {
+        log.info("Start tailing log group $logGroupName with glob ${config.log.files.glob}")
+
         val compressionMode = config.log.transit.compression
         tailLogGroup(logGroupName, config)
             .map { serialize(it, compressionMode) }
@@ -136,6 +138,8 @@ internal class LogPoller(
             }
 
             val checkpoint = checkpointer.getCheckpoint(logGroupName, filesConfig, files)
+
+            log.info("Start tailing file ${checkpoint.path} for log group $logGroupName")
             tailFile(checkpoint, freq, config, this)
             eofEmitted.add(checkpoint.path)
         }

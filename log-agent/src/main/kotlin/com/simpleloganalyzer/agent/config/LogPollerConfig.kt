@@ -15,6 +15,7 @@ import org.jetbrains.annotations.VisibleForTesting
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.format.DateTimeFormatter
+import kotlin.io.path.readText
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -220,6 +221,7 @@ enum class CompressionMode {
 private val TOML = Toml { ignoreUnknownKeys = false }
 
 object LogPollerConfigParser {
+    fun parse(path: Path): Map<String, LogGroupConfig> = parse(path.readText())
     fun parse(toml: String): Map<String, LogGroupConfig> {
         return TOML.decodeFromString(serializer<Map<String, LogGroupConfig>>(), toml)
     }

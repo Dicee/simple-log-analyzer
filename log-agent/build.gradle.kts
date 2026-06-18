@@ -16,6 +16,7 @@ dependencies {
     implementation(rootProject.libs.kotlinx.serialization.json)
     implementation(rootProject.libs.logback.classic)
     implementation("net.peanuuutz.tomlkt:tomlkt:0.5.0")
+    implementation("info.picocli:picocli:4.7.5")
     implementation(project(":commons"))
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.12.2")

@@ -3,6 +3,7 @@
 package com.simpleloganalyzer.agent
 
 import com.simpleloganalyzer.agent.config.CompressionMode
+import com.simpleloganalyzer.commons.logging.log
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.InstantComponentSerializer
 import kotlinx.serialization.json.Json
@@ -24,7 +25,7 @@ data class RawLogEvent(
     val message: String,
 )
 
-class DummyLogIngestionServiceClient : LogIngestionServiceClient {
+class InMemoryIngestionServiceClient : LogIngestionServiceClient {
     private val lock = Any()
     private val publishedEvents = mutableMapOf<String, MutableList<RawLogEvent>>()
 
@@ -54,3 +55,15 @@ class DummyLogIngestionServiceClient : LogIngestionServiceClient {
         eventsFor(logGroupName).joinToString("") { "${it.timestamp}|${it.message}\n" }
 }
 
+class LoggingIngestionServiceClient : LogIngestionServiceClient {
+    override fun publishLogs(logGroupName: String, payload: ByteArray, compressionMode: CompressionMode) {
+        val json = when (compressionMode) {
+            CompressionMode.NONE -> payload.decodeToString()
+            CompressionMode.GZIP -> GZIPInputStream(ByteArrayInputStream(payload)).use {
+                it.readBytes().decodeToString()
+            }
+        }
+        val events = Json.decodeFromString<List<RawLogEvent>>(json)
+        events.forEach { log.info("${it.timestamp}|${it.message}") }
+    }
+}

@@ -286,13 +286,13 @@ class LogPollerTest {
     /**
      * Tests for [LogPoller.start], the long-running per-log-group pipeline. These drive the whole flow end-to-end on
      * virtual time: file discovery is mocked while the actual tailing, archiving and publishing run for real against
-     * files on disk and a [DummyLogIngestionServiceClient].
+     * files on disk and a [InMemoryIngestionServiceClient].
      */
     @Nested
     inner class EndToEndMocked {
         private val helper = mockk<LogPollerHelper>()
         private val checkpointer = mockk<Checkpointer>()
-        private val client = spyk(DummyLogIngestionServiceClient())
+        private val client = spyk(InMemoryIngestionServiceClient())
 
         /**
          * Nominal flow, run for both compression modes. Starting with no file on disk, a head file with two lines appears
@@ -510,7 +510,7 @@ class LogPollerTest {
      */
     private fun TestScope.buildPoller(
         configs: Map<String, LogGroupConfig> = emptyMap(),
-        client: LogIngestionServiceClient = DummyLogIngestionServiceClient(),
+        client: LogIngestionServiceClient = InMemoryIngestionServiceClient(),
         helper: LogPollerHelper = LogPollerHelper(virtualClock()),
         checkpointer: Checkpointer = Checkpointer(configs.keys, helper),
         logPollerConfig: LogPollerConfig = LogPollerConfig(),

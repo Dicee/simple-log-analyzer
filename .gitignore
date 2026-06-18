@@ -26,3 +26,6 @@ ingestion-service/src/main/resources/static
 # Claude Code struggling mightily to reliably use Gradle in Windows because it's trying random bash scripts,
 # so helping it a bit with an explicit environment flag.
 .devenv
+
+# Fake log files and output of the log poller from those files, used for local testing
+test-files/*

@@ -57,6 +57,7 @@ class LogPollerHelper(
             )
         }
 
+        log.debug("Listed {} for file confing {}", files.size, config)
         return files
     }
 
