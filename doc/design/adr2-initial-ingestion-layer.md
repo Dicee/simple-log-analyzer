@@ -17,17 +17,17 @@ Below is the contract of the endpoint:
 
 **Request**
 - `logGroupName: String`
-- `logStreamName: String?`. If omitted, a new log stream will be created and the logs will be appended into it.
+- `logStreamName: String`
 - `body: blob`. A binary payload containing a collection of raw log events, which will all have to match the format type associated to the corresponding log group. The request's `Content-Type` will declare the payload format and will have to be consistent with the log group's configured format; we will throw otherwise. If the payload is compressed, the `Content-Encoding` header will declare the algorithm.
   Supported content types: `text/plain` (used for both `plain-text` and `logfmt`), `application/json`.
   Supported encodings: `identity`, `gzip`.
 
 **Response**
 
-- `logStreamName: String`. The actual log stream into which the data was written. It can be different from the value passed in the request either if it was missing in the request, or if the log stream has been rotated according to the log group's configuration to respect the maximum byte size.
+Empty body
 
 **Errors**
-- 400 status code if the request is invalid (e.g. un-parsable content, mismatching content type, missing log group name etc)
+- 400 status code if the request is invalid (e.g. un-parsable content, mismatching content type, missing log group or stream name etc)
 - 404 status code if the log group or log stream specified do not exist
 - 413 if the payload exceeds the maximum byte size or maximum number of records
 - regular HTTP error codes for generic issues
@@ -42,7 +42,7 @@ sequenceDiagram
         participant Storage as Storage Layer
     end
 
-    Caller->>API: PUT /put-logs (logGroupName, logStreamName?, body)
+    Caller->>API: PUT /put-logs (logGroupName, logStreamName, body)
     API->>API: Retrieve log group configuration
     API->>API: Parse body into collection of LogEvent objects
     opt Field extractors configured
@@ -50,16 +50,11 @@ sequenceDiagram
             API->>API: Apply field extractor to enrich LogEvent
         end
     end
-    alt Log stream exists and does not need rotation
-        API->>Storage: Locate file descriptor for log stream
-        Storage-->>API: File descriptor
-    else Log stream missing or needs rotation
-        API->>Storage: Create or rotate log stream, get new file descriptor
-        Storage-->>API: New file descriptor (new logStreamName)
-    end
+    API->>Storage: Locate file descriptor for log stream
+    Storage-->>API: File descriptor
     API->>Storage: Write log events
     Storage-->>API: Ack
-    API-->>Caller: 200 OK (logStreamName)
+    API-->>Caller: 200 OK
 ```
 
 ## Log agent

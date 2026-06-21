@@ -46,6 +46,7 @@ We propose the following 3 tables:
 | --------- | ----------- | ----------- | ----------- | -------- |
 | log_group | yes         | yes         | varchar(50) | false    |
 | type      | yes         | no          | varchar     | false    |
+| order     | no          | no          | integer     | false    |
 | args      | no          | no          | json        | true     |
 
 **log_streams**
