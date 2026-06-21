@@ -107,7 +107,7 @@ internal class LogPoller(
 
         while (!success) {
             try {
-                ingestionServiceClient.publishLogs(logGroupName, batch.payload, compressionMode)
+                ingestionServiceClient.publishLogs(logGroupName, pollerConfig.logStreamName, batch.payload, compressionMode)
                 success = true
             } catch (e: RuntimeException) {
                 val initialBackoff = pollerConfig.publishRetryInitialBackoff

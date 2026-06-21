@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalTime::class)
+
 package com.simpleloganalyzer.agent
 
 import com.simpleloganalyzer.agent.config.ByteSize
@@ -9,6 +11,8 @@ import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.agent.config.LogGroupConfig
 import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.agent.config.LogSection
+import com.simpleloganalyzer.agent.config.LogStreamResolver
+import com.simpleloganalyzer.agent.config.LogStreamResolverChain
 import com.simpleloganalyzer.agent.config.TransitConfig
 import com.simpleloganalyzer.commons.time.TickerClock
 import io.mockk.every
@@ -43,19 +47,19 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
 
-
 private const val APP_LOG = "app.log"
 
-@ExperimentalCoroutinesApi
-@OptIn(ExperimentalTime::class, ExperimentalSerializationApi::class)
-class LogPollerTest {
-    private companion object {
-        const val GROUP = "my-group"
-        const val TS_FORMAT = "yyyy-MM-dd HH:mm:ss"
-        val FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern(TS_FORMAT)
-        val FIXED_TIMESTAMP = Instant.fromEpochMilliseconds(0)
-    }
+private const val TS_FORMAT = "yyyy-MM-dd HH:mm:ss"
+private val FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern(TS_FORMAT)
+private val FIXED_TIMESTAMP = Instant.fromEpochMilliseconds(0)
 
+private const val GROUP = "my-group"
+private const val STREAM = "my-stream"
+private val STREAM_RESOLVER: LogStreamResolverChain = LogStreamResolver.defaultChainResolver(STREAM)
+
+@ExperimentalCoroutinesApi
+@OptIn(ExperimentalSerializationApi::class)
+class LogPollerTest {
     @TempDir private lateinit var tempDir: Path
 
     /**
@@ -253,7 +257,7 @@ class LogPollerTest {
         @Test
         fun testNextBatch_logBatchSizeReached_firstBatchIsFullAndSecondBatchIsPartialAtEof() = runTest {
             val batchSize = 3
-            val poller = buildPoller(logPollerConfig = LogPollerConfig(logBatchSize = batchSize))
+            val poller = buildPoller(logPollerConfig = LogPollerConfig(logStreamResolver = STREAM_RESOLVER, logBatchSize = batchSize))
 
             val tsPrefix = "2023-11-14 09:15:0"
             val lines = (1..5).map { i -> LogFormat.JSON.line("$tsPrefix$i", "event $i") }
@@ -379,7 +383,7 @@ class LogPollerTest {
             advanceTimeBy(200.seconds)
             runCurrent()
 
-            assertThat(client.eventsFor(GROUP)).containsExactly(
+            assertThat(client.eventsFor(GROUP, STREAM)).containsExactly(
                 RawLogEvent(FIXED_TIMESTAMP, "line1"),
                 RawLogEvent(FIXED_TIMESTAMP, "line2"),
                 RawLogEvent(FIXED_TIMESTAMP, "line3"),
@@ -400,7 +404,7 @@ class LogPollerTest {
         fun testStart_publishFailsTwiceThenSucceeds_resendsSameBatchWithoutDuplicatesAndCommitsOnce() = runTest {
             // First two attempts blow up; the third (and any later) call records the batch for real. Only the
             // serialized payload varies, so the group name and compression mode are matched exactly.
-            every { client.publishLogs(GROUP, any(), CompressionMode.NONE) }
+            every { client.publishLogs(GROUP, STREAM, any(), CompressionMode.NONE) }
                 .throws(RuntimeException("publish failed #1"))
                 .andThenThrows(RuntimeException("publish failed #2"))
                 .andThenAnswer { callOriginal() }
@@ -419,8 +423,8 @@ class LogPollerTest {
             runCurrent()
 
             // The single batch was retried until it succeeded: two failures + one success, and the lines appear once.
-            verify(exactly = 3) { client.publishLogs(GROUP, any(), CompressionMode.NONE) }
-            assertThat(client.eventsFor(GROUP)).containsExactly(
+            verify(exactly = 3) { client.publishLogs(GROUP, STREAM, any(), CompressionMode.NONE) }
+            assertThat(client.eventsFor(GROUP, STREAM)).containsExactly(
                 RawLogEvent(FIXED_TIMESTAMP, "line1"),
                 RawLogEvent(FIXED_TIMESTAMP, "line2"),
                 RawLogEvent(FIXED_TIMESTAMP, "line3"),
@@ -446,7 +450,7 @@ class LogPollerTest {
             // Always report the same single head file, except for one transient failure on the first listing that
             // happens after the first batch has been published (i.e. after the head file was partially consumed).
             every { helper.findMatchingFilesInOrder(filesConfig) } answers {
-                if (!hasThrown && client.eventsFor(GROUP).isNotEmpty()) {
+                if (!hasThrown && client.eventsFor(GROUP, STREAM).isNotEmpty()) {
                     hasThrown = true
                     throw RuntimeException("transient listing failure")
                 }
@@ -462,7 +466,7 @@ class LogPollerTest {
 
             assertThat(hasThrown).isTrue()
             // checkpointing prevents duplication: the restart resumes past the already-committed batch.
-            assertThat(client.eventsFor(GROUP)).containsExactly(
+            assertThat(client.eventsFor(GROUP, STREAM)).containsExactly(
                 RawLogEvent(FIXED_TIMESTAMP, "line1"),
                 RawLogEvent(FIXED_TIMESTAMP, "line2"),
             )
@@ -491,7 +495,7 @@ class LogPollerTest {
             advanceTimeBy(200.seconds)
             runCurrent()
 
-            assertThat(client.eventsFor(GROUP)).containsExactly(
+            assertThat(client.eventsFor(GROUP, STREAM)).containsExactly(
                 RawLogEvent(FIXED_TIMESTAMP, "line3"),
                 RawLogEvent(FIXED_TIMESTAMP, "line4"),
             )
@@ -564,7 +568,7 @@ class LogPollerTest {
         client: LogIngestionServiceClient = InMemoryIngestionServiceClient(),
         helper: LogPollerHelper = LogPollerHelper(virtualClock()),
         checkpointer: Checkpointer = Checkpointer(configs.keys, helper),
-        logPollerConfig: LogPollerConfig = LogPollerConfig(),
+        logPollerConfig: LogPollerConfig = LogPollerConfig(logStreamResolver = STREAM_RESOLVER),
     ): LogPoller {
         val dispatcher = StandardTestDispatcher(testScheduler)
         return LogPoller(

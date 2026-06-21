@@ -7,6 +7,7 @@ import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.agent.config.LogGroupConfig
 import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.agent.config.LogSection
+import com.simpleloganalyzer.agent.config.LogStreamResolver
 import com.simpleloganalyzer.agent.config.TransitConfig
 import com.simpleloganalyzer.commons.time.SystemTickerClock
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +49,7 @@ import kotlin.time.ExperimentalTime
 class LogPollerEndToEndTest {
     private companion object {
         const val TS_FORMAT = "yyyy-MM-dd HH:mm:ss"
+        const val STREAM_NAME = "e2e-test-stream"
 
         // A short maxPutDelay keeps the trailing file's final batch from sitting in the builder for the production
         // default (60s), so the test completes well within its 30s budget without sacrificing realism of the path.
@@ -99,7 +101,10 @@ class LogPollerEndToEndTest {
         val pollerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val poller = LogPoller(
             logGroupConfigs = configs,
-            pollerConfig = LogPollerConfig(fileCacheExpirySeconds = 1),
+            pollerConfig = LogPollerConfig(
+                fileCacheExpirySeconds = 1,
+                logStreamResolver = LogStreamResolver.defaultChainResolver(STREAM_NAME),
+            ),
             ingestionServiceClient = client,
             clock = SystemTickerClock,
         )
@@ -124,7 +129,7 @@ class LogPollerEndToEndTest {
             // 10s leaves comfortable headroom under the 15s test timeout while still allowing us to show whatever has been consumed so far,
             // which is more useful than just a timeout failure
             val finished = withTimeoutOrNull(10.seconds) {
-                while (groups.any { client.allLogsFor(it.name) != expected.getValue(it.name) }) {
+                while (groups.any { client.allLogsFor(it.name, STREAM_NAME) != expected.getValue(it.name) }) {
                     delay(100.milliseconds)
                 }
                 true
@@ -134,7 +139,7 @@ class LogPollerEndToEndTest {
             softly.assertThat(finished).describedAs("all groups reached their expected transcripts before the wait timeout").isTrue()
 
             for (g in groups) {
-                softly.assertThat(client.allLogsFor(g.name))
+                softly.assertThat(client.allLogsFor(g.name, STREAM_NAME))
                     .describedAs("transcript for %s", g.name)
                     .isEqualTo(expected.getValue(g.name))
             }

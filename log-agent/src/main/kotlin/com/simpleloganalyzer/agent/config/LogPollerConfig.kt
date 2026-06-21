@@ -35,6 +35,7 @@ private val DEFAULT_PUBLISH_RETRY_INITIAL_BACKOFF = 200.milliseconds
 private val DEFAULT_PUBLISH_RETRY_MAX_BACKOFF = DEFAULT_RESTART_BACKOFF
 
 data class LogPollerConfig(
+    val logStreamResolver: LogStreamResolverChain = LogStreamResolver.defaultChainResolver(),
     val fileCacheExpirySeconds: Long = DEFAULT_FILE_CACHE_EXPIRY_SECONDS,
     val maxPendingFilesPerLogGroup: Int = DEFAULT_PENDING_FILES_PER_LOG_GROUP,
     val logBatchSize: Int = LOG_BATCH_SIZE,
@@ -48,6 +49,9 @@ data class LogPollerConfig(
         require(fileCacheExpirySeconds > 0) { "File cache expiry seconds must be positive" }
         require(logBatchSize > 0) { "Log batch size must be positive" }
     }
+
+    val logStreamName: String
+        get() = logStreamResolver.resolveLogStreamName()
 }
 
 // Customer configuration of the log groups present on their disk

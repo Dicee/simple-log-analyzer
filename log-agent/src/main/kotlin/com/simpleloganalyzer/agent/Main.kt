@@ -5,6 +5,7 @@ package com.simpleloganalyzer.agent
 import com.simpleloganalyzer.agent.config.DEFAULT_PENDING_FILES_PER_LOG_GROUP
 import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.agent.config.LogPollerConfigParser
+import com.simpleloganalyzer.agent.config.LogStreamResolver
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import org.slf4j.LoggerFactory
@@ -42,6 +43,15 @@ class LogAgentCommand : Runnable {
     )
     var configPath: String = ""
 
+    @Option(
+        names = ["--log-stream-name"],
+        description = [
+            "Optional log stream name to use for all publishing by this session of the agent across all log groups.",
+            "If missing, a default one will be obtained through ",
+        ],
+    )
+    var logStreamName: String? = null
+
     override fun run() {
         log.info("log-agent starting")
         log.info("Working directory: ${System.getProperty("user.dir")}")
@@ -49,9 +59,10 @@ class LogAgentCommand : Runnable {
         log.info("Looking for config at: $configFile")
 
         runBlocking {
+            val logStreamResolver = LogStreamResolver.defaultChainResolver(logStreamName)
             val logPoller = LogPoller(
                 logGroupConfigs = LogPollerConfigParser.parse(configFile),
-                pollerConfig = LogPollerConfig(maxPendingFilesPerLogGroup = maxFiles),
+                pollerConfig = LogPollerConfig(logStreamResolver = logStreamResolver, maxPendingFilesPerLogGroup = maxFiles),
                 ingestionServiceClient = LoggingIngestionServiceClient(),
             )
 
