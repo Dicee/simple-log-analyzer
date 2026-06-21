@@ -63,7 +63,7 @@ data class LogSection(
     val files: FilesConfig,
     val format: LogFormat = LogFormat.PLAIN_TEXT,
     val date: DateConfig = DateConfig(),
-    val maxEventByteSize: ByteSize = ByteSize(1L shl 18), // 256 KiB
+    val maxEventByteSize: ByteSize = ByteSize(1 shl 18), // 256 KiB
     val transit: TransitConfig = TransitConfig(),
     private val maxPutDelaySeconds: Int = DEFAULT_MAX_PUT_DELAY_SECONDS,
 ) {
@@ -138,7 +138,7 @@ data class DateConfig(val field: String? = null, val format: String? = null, val
 }
 
 @Serializable(with = ByteSizeSerializer::class)
-data class ByteSize(val bytes: Long) {
+data class ByteSize(val bytes: Int) {
     init {
         require(bytes > 0) { "byte size must be strictly positive, got $bytes" }
     }
@@ -151,12 +151,12 @@ data class ByteSize(val bytes: Long) {
                 "byte size must be a positive number optionally followed by K, M, or G " +
                         "(e.g. '1M', '512K', '1024'), got '$raw'"
             )
-            val n = match.groupValues[1].toLong()
+            val n = match.groupValues[1].toInt()
             val multiplier = when (match.groupValues[2].uppercase()) {
-                "" -> 1L
-                "K" -> 1024L
-                "M" -> 1024L * 1024
-                "G" -> 1024L * 1024 * 1024
+                "" -> 1
+                "K" -> 1024
+                "M" -> 1024 * 1024
+                "G" -> 1024 * 1024 * 1024
                 else -> error("unreachable: regex restricts suffix to [KMG]?")
             }
             return ByteSize(n * multiplier)

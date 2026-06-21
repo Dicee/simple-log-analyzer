@@ -1,5 +1,6 @@
 package com.simpleloganalyzer.agent
 
+import com.simpleloganalyzer.agent.config.ByteSize
 import com.simpleloganalyzer.agent.config.CompressionMode
 import com.simpleloganalyzer.agent.config.DEFAULT_MAX_PUT_DELAY_SECONDS
 import com.simpleloganalyzer.agent.config.DateConfig
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.MethodSource
 import java.io.BufferedReader
 import java.nio.file.Files
 import java.nio.file.Path
@@ -40,6 +42,9 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
+
+
+private const val APP_LOG = "app.log"
 
 @ExperimentalCoroutinesApi
 @OptIn(ExperimentalTime::class, ExperimentalSerializationApi::class)
@@ -70,11 +75,11 @@ class LogPollerTest {
                 format.line("2023-11-14 09:15:02", "request received"),
                 format.line("2023-11-14 09:15:03", "request completed"),
             )
-            createFile("app.log", *lines.toTypedArray())
+            createFile(APP_LOG, *lines.toTypedArray())
 
             val config = structuredConfig(format)
-            val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log"), reader, poller.RawLogEventBuilder(config))
+            val batch = openReader(APP_LOG).use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve(APP_LOG), reader, poller.RawLogEventBuilder(config))
             }
 
             assertThat(batch).isEqualTo(ReadBatch(
@@ -135,11 +140,11 @@ class LogPollerTest {
         @Test
         fun testNextBatch_plainText_singleLine_withoutTimestamp() = runTest {
             val poller = buildPoller()
-            createFile("app.log", "no timestamp here")
+            createFile(APP_LOG, "no timestamp here")
 
             val config = plainTextConfig()
-            val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log"), reader, poller.RawLogEventBuilder(config))
+            val batch = openReader(APP_LOG).use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve(APP_LOG), reader, poller.RawLogEventBuilder(config))
             }
 
             assertThat(batch).isEqualTo(ReadBatch(
@@ -151,17 +156,17 @@ class LogPollerTest {
         @Test
         fun testNextBatch_plainText_singleLine_withTimestamp_flushedByMaxPutDelayTimeout() = runTest {
             val poller = buildPoller()
-            createFile("app.log", "2023-01-01 00:00:00 hello")
+            createFile(APP_LOG, "2023-01-01 00:00:00 hello")
 
             val config = plainTextConfig()
-            val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log"), reader, poller.RawLogEventBuilder(config))
+            val batch = openReader(APP_LOG).use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve(APP_LOG), reader, poller.RawLogEventBuilder(config))
             }
 
             // The timestamped line opens an event; with no successor file it is only finalized once maxPutDelay elapses.
             assertThat(batch).isEqualTo(ReadBatch(
                 events = listOf(RawLogEvent(instant("2023-01-01 00:00:00"), "2023-01-01 00:00:00 hello")),
-                    eof = false
+                eof = false
             ))
             assertThat(testScheduler.currentTime).isEqualTo(DEFAULT_MAX_PUT_DELAY_SECONDS * 1000L)
         }
@@ -187,11 +192,11 @@ class LogPollerTest {
         fun testNextBatch_plainText_singleMultiLineEvent_flushedByMaxPutDelayTimeout() = runTest {
             val poller = buildPoller()
             val lines = arrayOf("2023-01-01 00:00:00 boom", "  at Foo.bar(Foo.kt:1)", "  at Baz.qux(Baz.kt:2)")
-            createFile("app.log", *lines)
+            createFile(APP_LOG, *lines)
 
             val config = plainTextConfig()
-            val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log"), reader, poller.RawLogEventBuilder(config))
+            val batch = openReader(APP_LOG).use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve(APP_LOG), reader, poller.RawLogEventBuilder(config))
             }
 
             val expectedEvent = RawLogEvent(instant("2023-01-01 00:00:00"), lines.joinToString("\n"))
@@ -220,7 +225,7 @@ class LogPollerTest {
         fun testNextBatch_plainTextMixtureOfEventShapes_assemblesEachEventAndFlushesTheTrailingOne() = runTest {
             val poller = buildPoller()
             createFile(
-                "app.log",
+                APP_LOG,
                 "preamble without timestamp", // standalone single-line event
                 "2023-01-01 00:00:00 boom", // opens a multi-line event...
                 "  at Foo.bar(Foo.kt:1)", // ...continuation folded into it
@@ -229,8 +234,8 @@ class LogPollerTest {
             )
 
             val config = plainTextConfig()
-            val batch = openReader("app.log").use { reader ->
-                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve("app.log"), reader, poller.RawLogEventBuilder(config))
+            val batch = openReader(APP_LOG).use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve(APP_LOG), reader, poller.RawLogEventBuilder(config))
             }
 
             assertThat(batch).isEqualTo(ReadBatch(
@@ -270,7 +275,53 @@ class LogPollerTest {
             }
         }
 
-        private fun plainTextConfig() = logGroupConfig(format = LogFormat.PLAIN_TEXT, date = DateConfig(format = TS_FORMAT))
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("com.simpleloganalyzer.agent.Utf8ClipTestCaseProvider#utf8ClipTestCases")
+        fun testNextBatch_clipsEventByteSize_simpleCases(testCase: Utf8ClipTestCase) = runTest {
+            val poller = buildPoller()
+            val config = plainTextConfig(maxByteSize = ByteSize(testCase.limitBytes))
+            createFile(APP_LOG, testCase.input)
+
+            val batch = openReader(APP_LOG).use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve(APP_LOG), reader, poller.RawLogEventBuilder(config))
+            }
+
+            assertThat(testCase.expected.toByteArray().size).isLessThanOrEqualTo(testCase.limitBytes) // check that the test case is sound
+            assertThat(batch).isEqualTo(ReadBatch(
+                events = listOf(RawLogEvent(FIXED_TIMESTAMP, testCase.expected)
+                ),
+                eof = false,
+            ))
+        }
+
+        @Test
+        fun testNextBatch_clipsEventByteSize_newLineAfterFlushIsTooLarge() = runTest {
+            // 20 + 2 + 1 + 5 + 1 + 2 = 31 bytes
+            val multiLineInput = "1970-01-01 00:00:00 aa\n©a\naa"
+
+            val poller = buildPoller()
+            val config = plainTextConfig(maxByteSize = ByteSize(25)) // less than 31!
+            createFile(APP_LOG, "1970-01-01 00:00:00 okay", multiLineInput)
+
+            val batch = openReader(APP_LOG).use { reader ->
+                poller.nextBatch(config, freq = 1.seconds, tempDir.resolve(APP_LOG), reader, poller.RawLogEventBuilder(config))
+            }
+
+            assertThat(batch).isEqualTo(ReadBatch(
+                events = listOf(
+                    RawLogEvent(FIXED_TIMESTAMP, "1970-01-01 00:00:00 okay"),
+                    RawLogEvent(FIXED_TIMESTAMP, "1970-01-01 00:00:00 aa\n©")
+                ),
+                eof = false,
+            ))
+        }
+
+        private fun plainTextConfig(maxByteSize: ByteSize = ByteSize(Int.MAX_VALUE)) =
+            logGroupConfig(
+                format = LogFormat.PLAIN_TEXT,
+                date = DateConfig(format = TS_FORMAT),
+                maxByteSize = maxByteSize
+            )
 
         // Structured formats parse the timestamp from the default "timestamp" field, using the shared zoneless pattern.
         private fun structuredConfig(format: LogFormat) = logGroupConfig(format = format, date = DateConfig(format = TS_FORMAT))
@@ -532,12 +583,14 @@ class LogPollerTest {
         compression: CompressionMode = CompressionMode.GZIP,
         format: LogFormat = LogFormat.PLAIN_TEXT,
         date: DateConfig = DateConfig(),
+        maxByteSize: ByteSize = ByteSize(Int.MAX_VALUE)
     ) = LogGroupConfig(
         LogSection(
             files = FilesConfig(root = tempDir.toString(), glob = "app.log*"),
             format = format,
             date = date,
             transit = TransitConfig(compression),
+            maxEventByteSize = maxByteSize,
         ),
     )
 
@@ -553,4 +606,113 @@ class LogPollerTest {
     private fun openReader(name: String): BufferedReader = tempDir.resolve(name).toFile().bufferedReader()
 
     private fun instant(dateTime: String) = LocalDateTime.parse(dateTime, FORMATTER).toInstant(ZoneOffset.UTC).toKotlinInstant()
+}
+
+data class Utf8ClipTestCase(
+    val name: String,
+    val input: String,
+    val limitBytes: Int,
+    val expected: String,
+) {
+    override fun toString() = name
+}
+
+@Suppress("UNUSED") // it's used by MethodSource
+object Utf8ClipTestCaseProvider {
+    @JvmStatic
+    fun utf8ClipTestCases(): List<Utf8ClipTestCase> {
+        // 20 + 2 + 1 + 5 + 1 + 2 = 31 bytes
+        val multiLineInput = "1970-01-01 00:00:00 aa\n©a\naa"
+
+        return listOf(
+            // Single character, single byte (ASCII): 12 bytes exactly
+            Utf8ClipTestCase(
+                name = "single-char-1byte-12bytes",
+                input = "aaaaaaaaaaaa", // 12 ASCII bytes, fits exactly
+                limitBytes = 12,
+                expected = "aaaaaaaaaaaa",
+            ),
+            // Single character, two bytes each: 6 chars × 2 bytes = 12 bytes
+            Utf8ClipTestCase(
+                name = "single-char-2bytes-12bytes",
+                input = "©©©©©©", // 6 × 2-byte chars = 12 bytes
+                limitBytes = 12,
+                expected = "©©©©©©",
+            ),
+            // Single character, three bytes each: 4 chars × 3 bytes = 12 bytes
+            Utf8ClipTestCase(
+                name = "single-char-3bytes-12bytes",
+                input = "€€€€", // 4 × 3-byte chars = 12 bytes
+                limitBytes = 12,
+                expected = "€€€€",
+            ),
+            // Single character, four bytes each: 3 chars × 4 bytes = 12 bytes
+            Utf8ClipTestCase(
+                name = "single-char-4bytes-12bytes",
+                input = "😀😀😀", // 3 × 4-byte chars = 12 bytes
+                limitBytes = 12,
+                expected = "😀😀😀",
+            ),
+            // Mix of all sizes: 2×1byte + 1×2byte + 1×3byte + 1×4byte + 1×1byte = 12 bytes total
+            Utf8ClipTestCase(
+                name = "mixed-sizes-12bytes",
+                input = "aa©€😀a", // 2 + 2 + 3 + 4 + 1 = 12 bytes, fits exactly
+                limitBytes = 12,
+                expected = "aa©€😀a",
+            ),
+            // Clipping in the middle of a 4-byte char: should drop the incomplete char
+            Utf8ClipTestCase(
+                name = "clipped-4byte-char",
+                input = "aaaaaa😀", // 6 + 4 = 10 bytes; limit 8 means we'd clip in the middle of 😀
+                limitBytes = 8,
+                expected = "aaaaaa", // 😀 dropped, only the 6 a's remain
+            ),
+            // Clipping in the middle of a 3-byte char: should drop the incomplete char
+            Utf8ClipTestCase(
+                name = "clipped-3byte-char",
+                input = "aaaa€", // 4 + 3 = 7 bytes; limit 5 means we'd clip in the middle of €
+                limitBytes = 5,
+                expected = "aaaa", // € dropped
+            ),
+            // Clipping in the middle of a 2-byte char: should drop the incomplete char
+            Utf8ClipTestCase(
+                name = "clipped-2byte-char",
+                input = "aaaaaa©", // 6 + 2 = 8 bytes; limit 7 means we'd clip in the middle of ©
+                limitBytes = 7,
+                expected = "aaaaaa", // © dropped
+            ),
+            // Clipping in the middle of a 2-byte char: should drop the incomplete char
+            Utf8ClipTestCase(
+                name = "clipped-2byte-char-to-empty",
+                input = "©", // 2 bytes; limit 1 means we'd clip in the middle of ©, so we need to drop it
+                limitBytes = 1,
+                expected = "", // © dropped
+            ),
+            // Clipping in the middle of one line, ignoring others
+            Utf8ClipTestCase(
+                name = "clipped-multi-line-whole-inner-character",
+                input = multiLineInput, // 31 bytes; limit 25 means we'll clip in the middle of the second line
+                limitBytes = 25,
+                expected = "1970-01-01 00:00:00 aa\n©",
+            ),
+            Utf8ClipTestCase(
+                name = "clipped-multi-line-clipped-inner-character",
+                input = multiLineInput, // 31 bytes; limit 24 means we'll clip in the middle of ©, so it'll be dropped, and so will the new line character
+                limitBytes = 24,
+                expected = "1970-01-01 00:00:00 aa",
+            ),
+            Utf8ClipTestCase(
+                name = "clipped-multi-line-exactly-at-line-boundary-including-newline-char",
+                input = multiLineInput,
+                limitBytes = 23,
+                expected = "1970-01-01 00:00:00 aa",
+            ),
+            Utf8ClipTestCase(
+                name = "clipped-multi-line-exactly-at-line-boundary-excluding-newline-char",
+                input = multiLineInput,
+                limitBytes = 22,
+                expected = "1970-01-01 00:00:00 aa",
+            ),
+        )
+    }
 }

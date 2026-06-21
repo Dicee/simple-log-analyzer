@@ -208,7 +208,7 @@ class LogPollerConfigParserTest {
 
     @Test
     fun testParse_byteSize_suffixToBytesResolution() {
-        fun parseSize(value: String): Long {
+        fun parseSize(value: String): Int {
             val toml = """
                 [g]
                 log.files.glob = "x"
@@ -263,7 +263,7 @@ class LogPollerConfigParserTest {
                         files = FilesConfig(root = "/var/log/myapp", glob = "application.log*"),
                         format = LogFormat.JSON,
                         date = DateConfig(field = "ts", format = "yyyy-MM-dd"),
-                        maxEventByteSize = ByteSize(512L * 1024),
+                        maxEventByteSize = ByteSize(512 * 1024),
                     ),
                 ),
                 "nginx" to LogGroupConfig(
@@ -271,7 +271,7 @@ class LogPollerConfigParserTest {
                         files = FilesConfig(root = "/var/log/nginx", glob = "access.log*"),
                         format = LogFormat.PLAIN_TEXT,
                         date = DateConfig(format = "dd/MM/yyyy:HH:mm:ss Z"),
-                        maxEventByteSize = ByteSize(1024L * 1024),
+                        maxEventByteSize = ByteSize(1024 * 1024),
                         transit = TransitConfig(compression = CompressionMode.NONE),
                     ),
                 ),

@@ -233,6 +233,7 @@ internal class LogPoller(
         // Time we started collecting it. Important to separate from the event's timestamp in case we ingest historical logs.
         internal var eventStartedAt: Instant? = null
         private var timestamp: Instant? = null
+        private var totalByteSize: Int = 0
         private val lines: MutableList<String> = mutableListOf()
 
         /**
@@ -247,7 +248,7 @@ internal class LogPoller(
             if (format != LogFormat.PLAIN_TEXT) return RawLogEvent(timestamp ?: now, line)
             return if (eventStartedAt == null) {
                 // if there's no timestamp on the line, we assume it's a single-line event and assign a default timestamp
-                if (timestamp == null) return RawLogEvent(now, line)
+                if (timestamp == null) return RawLogEvent(now, clipWholeToMaxByteSize(line))
                 startNewEvent(timestamp, line)
                 null
             } else if (timestamp != null) {
@@ -255,7 +256,7 @@ internal class LogPoller(
                 startNewEvent(timestamp, line)
                 event
             } else {
-                lines += line
+                appendLine(line)
                 null
             }
         }
@@ -263,7 +264,66 @@ internal class LogPoller(
         private fun startNewEvent(timestamp: Instant, line: String) {
             eventStartedAt = clock.now()
             this.timestamp = timestamp
-            lines += line
+            appendLine(line)
+        }
+
+        // note that we could clip only at the end, but clipping on every appended line protects us against malformed logs
+        // with huge events, since we won't store the whole thing in memory before clipping it
+        private fun appendLine(line: String) {
+            val bytes = line.toByteArray()
+            val newLineByte = if (lines.isNotEmpty()) 1 else 0
+
+            val maxEventByteSize = config.log.maxEventByteSize.bytes
+            val limitByteSize = bytes.size.coerceAtMost(maxEventByteSize - totalByteSize - newLineByte)
+            val clippedBytes = clipPartToMaxByteSize(bytes, limitByteSize)
+
+            if (clippedBytes.isNotEmpty()) {
+                totalByteSize += clippedBytes.size + newLineByte
+                lines += String(clippedBytes)
+            } else {
+                // we need this because totalByteSize might be a few bytes smaller than the max if we dropped a multi-byte character, but we should
+                // not add extra characters with a smaller byte encoding from next lines
+                totalByteSize = maxEventByteSize
+            }
+        }
+
+        // Note: we only support UTF8
+        private fun clipWholeToMaxByteSize(s: String): String {
+            return String(clipPartToMaxByteSize(s.toByteArray(), config.log.maxEventByteSize.bytes))
+        }
+
+        // Note: we only support UTF8
+        private fun clipPartToMaxByteSize(bytes: ByteArray, limitByteSize: Int): ByteArray {
+            if (bytes.size <= limitByteSize) return bytes
+
+            // Walk backward from the limit to find a valid UTF-8 character boundary.
+            // We need to:
+            // 1. avoid cutting in the middle of continuation bytes (01xxxxxx)
+            // 2. if the last byte is a start byte (11xxxxxx), ensure we have all its continuation bytes
+            var i = limitByteSize - 1
+            while (i >= 0 && (bytes[i].toInt() and 0xC0) == 0x80) i -= 1
+
+            if (i < 0) return ByteArray(0)
+
+            // i now points to either an ASCII byte (0xxxxxxx) or a multi-byte start byte (110xxxxx, 1110xxxx, or 11110xxx).
+            // Validate it's a valid start byte and that we have all its continuation bytes.
+            val startByte = bytes[i].toInt()
+            val expectedContBytes = when {
+                (startByte and 0x80) == 0    -> 0 // ASCII : 0xxxxxxx
+                (startByte and 0xE0) == 0xC0 -> 1 // 2-byte: 110xxxxx
+                (startByte and 0xF0) == 0xE0 -> 2 // 3-byte: 1110xxxx
+                (startByte and 0xF8) == 0xF0 -> 3 // 4-byte: 11110xxx
+                else -> error("Invalid start ASCII byte $startByte")
+            }
+
+            val actualContBytes = limitByteSize - 1 - i
+            if (actualContBytes < expectedContBytes) {
+                // Not enough continuation bytes, drop this character too
+                i -= 1
+                return if (i >= 0) bytes.sliceArray(0..i) else ByteArray(0)
+            }
+
+            return bytes.sliceArray(0..i + expectedContBytes)
         }
 
         /**
@@ -278,11 +338,14 @@ internal class LogPoller(
         }
 
         private fun doFlush(): RawLogEvent {
-            val event = RawLogEvent(timestamp!!, lines.joinToString("\n"))
+            val rawEvent = lines.joinToString("\n").trim()
+            val clippedEvent = clipWholeToMaxByteSize(rawEvent) // should be redundant because we clip along the way, but just in case
+            val event = RawLogEvent(timestamp!!, clippedEvent)
 
             eventStartedAt = null
             timestamp = null
             lines.clear()
+            totalByteSize = 0
 
             return event
         }
