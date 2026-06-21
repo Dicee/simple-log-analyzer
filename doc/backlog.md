@@ -6,9 +6,8 @@
 - when adding metrics, make sure we are ok with delivery semantics (should probably be able to switch from at-least-once to at-most-once ; unfortunately I think exactly-once will be too complicated in edge cases)
 - log poller implementation
 	- add process supervisor Mac + Linux
-- review ADR1 definition for log stream. I think I prefer supporting infinite streams, by splitting into separate files transparently.
-
 # Done
+- review ADR1 definition for log stream. I think I prefer supporting infinite streams, by splitting into separate files transparently.
 - parse config in CLI
 - address remaining TODOs in the `LogPoller
 - add checkpointing support in the `LogPoller`

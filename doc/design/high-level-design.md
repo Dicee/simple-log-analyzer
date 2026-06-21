@@ -144,6 +144,7 @@ In this section, we will go through the tech stack and the organization of the b
 - Kotlin will be used for the log ingestion service (Ktor server) as well as the log agent interfacing with the ingestion service. Ktor is a pretty adequate choice because it is intrinsically asynchronous (using coroutines), which is often a good choice for use cases where IO and network are big contributors to the latency.
 - Angular will be used for the front-end. It might be overkill for a simple app, but I wanted to have a personal project in Angular since I recently started using Angular at work.
 - Docker Compose will be used to encapsulate the front-end and back-end, and allow running them together as a unit in a container. This setup is appropriate enough for a dev tool (I intend to use the tool for my local debugging).
+- SQLite will be used as an embedded relational store for metadata (log groups, log streams, log files). It requires no separate server process and its file format is portable, making it a natural fit for a local developer tool. [Exposed](https://www.jetbrains.com/exposed/) will be used as the SQL DSL layer, as it is idiomatic Kotlin and integrates cleanly with SQLite via the xerial JDBC driver.
 - For testing, we'll mainly use, JUnit5, MockK, AssertJ (I love its syntax and rich feature set). We will also have to use either Kotest or Turbine (to be experimented with) for coroutine testing.
 
 ### Target system
