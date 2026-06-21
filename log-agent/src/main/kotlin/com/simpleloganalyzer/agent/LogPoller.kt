@@ -117,7 +117,8 @@ internal class LogPoller(
                 log.error("Failed publishing batch for $logGroupName. Retrying in $backoff...", e)
                 delay(backoff)
 
-                attempt += 1
+                // Avoid overflowing our multiplier. The overflow of the multiplication itself is already handled by Duration.
+                if (attempt < 30) attempt += 1
             }
         }
     }
