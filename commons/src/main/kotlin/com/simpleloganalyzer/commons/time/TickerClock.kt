@@ -1,9 +1,6 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.simpleloganalyzer.commons.time
 
 import kotlin.time.Clock
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

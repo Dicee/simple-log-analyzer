@@ -14,7 +14,6 @@ import picocli.CommandLine.Command
 import picocli.CommandLine.Option
 import java.nio.file.Paths
 import kotlin.system.exitProcess
-import kotlin.time.ExperimentalTime
 
 private val log = LoggerFactory.getLogger("log-agent")
 
@@ -24,7 +23,6 @@ private val log = LoggerFactory.getLogger("log-agent")
     mixinStandardHelpOptions = true
 )
 @ExperimentalSerializationApi
-@ExperimentalTime
 class LogAgentCommand : Runnable {
     @Option(
         names = ["--max-files"],
@@ -78,7 +76,6 @@ class LogAgentCommand : Runnable {
     }
 }
 
-@ExperimentalTime
 fun main(args: Array<String>) {
     exitProcess(CommandLine(LogAgentCommand()).execute(*args))
 }

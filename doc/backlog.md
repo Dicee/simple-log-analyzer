@@ -6,6 +6,12 @@
 - when adding metrics, make sure we are ok with delivery semantics (should probably be able to switch from at-least-once to at-most-once ; unfortunately I think exactly-once will be too complicated in edge cases)
 - log poller implementation
 	- add process supervisor Mac + Linux
+- consider adding requirements specific to back-end and indexing
+- create CRUD endpoints for log metadata entities
+	- add tests for each DAO and service
+	- review the isolation mode carefully for each transaction
+    - add tests for Pagination
+
 # Done
 - review ADR1 definition for log stream. I think I prefer supporting infinite streams, by splitting into separate files transparently.
 - parse config in CLI
@@ -27,3 +33,5 @@
 	- separate build module for the log poller and log nanny, with a dummy poller and launch script
 	- Gradle build config
 	- dummy index page for Angular app
+- create CRUD endpoints for log metadata entities
+  - server and endpoint setup

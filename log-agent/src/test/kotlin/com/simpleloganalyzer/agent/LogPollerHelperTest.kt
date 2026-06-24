@@ -4,8 +4,8 @@ package com.simpleloganalyzer.agent
 import com.simpleloganalyzer.agent.config.DateConfig
 import com.simpleloganalyzer.agent.config.DEFAULT_FILE_CACHE_EXPIRY_SECONDS
 import com.simpleloganalyzer.agent.config.FilesConfig
-import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.agent.config.LogPollerConfig
+import com.simpleloganalyzer.ingestion.model.LogFormat
 import com.simpleloganalyzer.testcommons.assertions.MoreAssertions
 import com.simpleloganalyzer.testcommons.time.FakeTickerClock
 import io.mockk.MockKAnnotations
@@ -21,10 +21,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.stream.Stream
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-@OptIn(ExperimentalTime::class)
 class LogPollerHelperTest {
     @TempDir private lateinit var tempDir: Path
 

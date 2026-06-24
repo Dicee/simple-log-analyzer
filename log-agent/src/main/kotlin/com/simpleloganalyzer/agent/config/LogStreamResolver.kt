@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.simpleloganalyzer.agent.config
 
 import com.simpleloganalyzer.commons.logging.log
@@ -7,7 +5,6 @@ import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.*
 import kotlin.time.Clock
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 interface LogStreamResolver {

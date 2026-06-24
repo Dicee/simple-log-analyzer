@@ -29,3 +29,6 @@ ingestion-service/src/main/resources/static
 
 # Fake log files and output of the log poller from those files, used for local testing
 test-files/*
+
+# local testing
+data/*

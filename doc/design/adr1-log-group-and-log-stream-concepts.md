@@ -12,6 +12,7 @@ A log group is uniquely identified by a human-readable, user-defined name, while
 ## Log group configuration
 
 All the configuration is handled at the log group level ; there is no configuration at the log stream level. Below are the following configuration elements available for a log group:
+- an optional, free-form description (human-readable) to allow the user document what the group is for.
 - format type, among one of the supported formats (initially JSON, logfmt and plain text)
 - custom enricher/field extractor. This notion will be developed in more depth in [ADR2](adr2-initial-ingestion-layer.md).
 - compression algorithm to use for at-rest data. Note that this is separate from such considerations for in-transit data, which can be compressed to optimize bandwidth. The sender will decide on the transit format independently of the log group configuration.
@@ -33,12 +34,13 @@ We propose the following 3 tables:
 
 **log_groups**
 
-| Column        | Primary key | Type        | Nullable |
-| ------------- | ----------- | ----------- | -------- |
-| name          | yes         | varchar(50) | false    |
-| creation_date | no          | timestamp   | false    |
-| format        | no          | varchar     | false    |
-| compression   | no          | varchar     | false    |
+| Column        | Primary key | Type         | Nullable |
+| ------------- | ----------- | ------------ | -------- |
+| name          | yes         | varchar(50)  | false    |
+| description   | no          | varchar(200) | true     |
+| creation_date | no          | timestamp    | false    |
+| format        | no          | varchar      | false    |
+| compression   | no          | varchar      | false    |
 
 **log_group_enrichers**
 
@@ -56,6 +58,7 @@ We propose the following 3 tables:
 | log_group     | yes         | yes         | varchar(50) | false    |
 | stream_name   | yes         | no          | varchar(50) | false    |
 | creation_date | no          | no          | timestamp   | false    |
+
 **log_files**
 
 | Column             | Primary key | Foreign key | Type        | Nullable |
@@ -81,15 +84,21 @@ A log group can be:
 
 | Setting                             | Mutable | Notes                                                                                                                   |
 | ----------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| description                         | Yes     | Purely informational; can be edited freely without affecting ingested data.                                             |
 | format type                         | No      | Existing at-rest data is stored in the original format; changing it would make already-ingested data inconsistent.      |
 | compression algorithm               | No      | At-rest data is already written with the original algorithm; changing it would make already-ingested data inconsistent. |
 | custom enrichers / field extractors | Yes     | Changes apply only to new log entries; previously ingested entries are not reprocessed.                                 |
 - deleted, with `/delete-log-group`. By default this only succeeds if the group contains no log stream, to avoid accidentally destroying data. A `force` flag can be passed to override this and delete the group along with all its streams in a single call.
 
+Enrichers do not have a lifecycle of their own, they only live as a sub-configuration of a log group.
 ### Log stream
 
 A log stream can be: 
 - created, with the `create-log-stream` API, which takes only a log group name as a parameter
-- deleted, with `delete-log-stream`
+- deleted, with `delete-log-stream`. Note that this deletes all log files under this stream. 
+### Log file
+
+ Files cannot be created nor deleted through an API, they're an internal implementation detail and their lifecycle is entirely dependent of their containing log stream's lifecycle.
+
 
 

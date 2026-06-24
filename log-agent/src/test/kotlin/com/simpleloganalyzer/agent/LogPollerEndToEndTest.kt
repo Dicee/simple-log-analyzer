@@ -1,15 +1,15 @@
 package com.simpleloganalyzer.agent
 
-import com.simpleloganalyzer.agent.config.CompressionMode
 import com.simpleloganalyzer.agent.config.DateConfig
 import com.simpleloganalyzer.agent.config.FilesConfig
-import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.agent.config.LogGroupConfig
 import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.agent.config.LogSection
 import com.simpleloganalyzer.agent.config.LogStreamResolver
 import com.simpleloganalyzer.agent.config.TransitConfig
 import com.simpleloganalyzer.commons.time.SystemTickerClock
+import com.simpleloganalyzer.ingestion.model.CompressionMode
+import com.simpleloganalyzer.ingestion.model.LogFormat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,7 +32,6 @@ import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 
 /**
  * Real-time end-to-end test for [LogPoller]. Unlike [LogPollerTest], which drives the poller on a virtual clock with
@@ -45,7 +44,6 @@ import kotlin.time.ExperimentalTime
  * a successor file in the same directory. The three groups run in parallel to exercise concurrent pipelines.
  */
 @ExperimentalSerializationApi
-@OptIn(ExperimentalTime::class)
 class LogPollerEndToEndTest {
     private companion object {
         const val TS_FORMAT = "yyyy-MM-dd HH:mm:ss"

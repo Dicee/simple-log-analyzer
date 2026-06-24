@@ -1,15 +1,12 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.simpleloganalyzer.agent
 
-import com.simpleloganalyzer.agent.config.CompressionMode
 import com.simpleloganalyzer.commons.logging.log
+import com.simpleloganalyzer.ingestion.model.CompressionMode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.InstantComponentSerializer
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayInputStream
 import java.util.zip.GZIPInputStream
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

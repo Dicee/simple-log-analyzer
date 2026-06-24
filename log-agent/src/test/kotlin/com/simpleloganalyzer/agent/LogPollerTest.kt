@@ -1,13 +1,9 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.simpleloganalyzer.agent
 
 import com.simpleloganalyzer.agent.config.ByteSize
-import com.simpleloganalyzer.agent.config.CompressionMode
 import com.simpleloganalyzer.agent.config.DEFAULT_MAX_PUT_DELAY_SECONDS
 import com.simpleloganalyzer.agent.config.DateConfig
 import com.simpleloganalyzer.agent.config.FilesConfig
-import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.agent.config.LogGroupConfig
 import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.agent.config.LogSection
@@ -15,6 +11,8 @@ import com.simpleloganalyzer.agent.config.LogStreamResolver
 import com.simpleloganalyzer.agent.config.LogStreamResolverChain
 import com.simpleloganalyzer.agent.config.TransitConfig
 import com.simpleloganalyzer.commons.time.TickerClock
+import com.simpleloganalyzer.ingestion.model.CompressionMode
+import com.simpleloganalyzer.ingestion.model.LogFormat
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
@@ -43,7 +41,6 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
 

@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.simpleloganalyzer.agent.config
 
 import com.simpleloganalyzer.testcommons.time.FakeTickerClock
@@ -9,7 +7,6 @@ import org.junit.jupiter.api.Test
 import java.net.InetAddress
 import java.net.UnknownHostException
 import kotlin.time.Clock
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 private val NOW = Instant.fromEpochSeconds(17)

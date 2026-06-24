@@ -1,5 +1,7 @@
 package com.simpleloganalyzer.agent.config
 
+import com.simpleloganalyzer.ingestion.model.CompressionMode
+import com.simpleloganalyzer.ingestion.model.LogFormat
 import com.simpleloganalyzer.testcommons.assertions.MoreAssertions
 import kotlinx.serialization.SerializationException
 import org.assertj.core.api.Assertions.assertThat

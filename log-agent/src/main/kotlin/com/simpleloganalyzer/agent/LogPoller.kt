@@ -1,12 +1,12 @@
 package com.simpleloganalyzer.agent
 
-import com.simpleloganalyzer.agent.config.CompressionMode
-import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.agent.config.LogGroupConfig
 import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.commons.logging.log
 import com.simpleloganalyzer.commons.time.SystemTickerClock
 import com.simpleloganalyzer.commons.time.TickerClock
+import com.simpleloganalyzer.ingestion.model.CompressionMode
+import com.simpleloganalyzer.ingestion.model.LogFormat
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
@@ -26,12 +26,10 @@ import java.util.zip.GZIPOutputStream
 import kotlin.io.path.inputStream
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.time.times
 
 @ExperimentalSerializationApi
-@ExperimentalTime
 internal class LogPoller(
     private val logGroupConfigs: Map<String, LogGroupConfig>,
     private val pollerConfig: LogPollerConfig = LogPollerConfig(),

@@ -1,7 +1,8 @@
 package com.simpleloganalyzer.agent.config
 
+import com.simpleloganalyzer.ingestion.model.CompressionMode
+import com.simpleloganalyzer.ingestion.model.LogFormat
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -111,13 +112,6 @@ data class FilesConfig(val root: String = "", val glob: String) {
     }
 }
 
-@Serializable(with = LogFormatSerializer::class)
-enum class LogFormat(val displayName: String) {
-    @SerialName("plain-text") PLAIN_TEXT("plain-text"),
-    @SerialName("json") JSON("json"),
-    @SerialName("logfmt") LOGFMT("logfmt"),
-}
-
 @Serializable
 data class DateConfig(val field: String? = null, val format: String? = null, val isEpochMillis: Boolean = false) {
     init {
@@ -187,40 +181,10 @@ private object ByteSizeSerializer : KSerializer<ByteSize> {
     }
 }
 
-// A bit sad that I had to do this, but I find the default enum serializer bad in terms of error message, and its implementation looks overcomplicated.
-// I am probably missing the point of why they had to do it the way they did, but ok. This is simple and gets me what I want.
-private class LogFormatSerializer : EnumSerializer<LogFormat>(LogFormat::class.java)
-private class CompressionSerializer : EnumSerializer<CompressionMode>(CompressionMode::class.java)
-private open class EnumSerializer<T: Enum<T>>(private val clazz: Class<T>) : KSerializer<T> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor(clazz.name, PrimitiveKind.STRING)
-
-    private val bySerialName: Map<String, T> = clazz.enumConstants.associateBy { constant ->
-        clazz.getDeclaredField(constant.name).getDeclaredAnnotation(SerialName::class.java)?.value ?: constant.name
-    }
-
-    override fun deserialize(decoder: Decoder): T {
-        val name = decoder.decodeString()
-        return bySerialName[name]
-            ?: throw SerializationException("Invalid value '$name' for enumeration ${clazz.simpleName}. Valid values: ${bySerialName.keys}")
-    }
-
-    override fun serialize(encoder: Encoder, value: T) {
-        val serialName = clazz.getDeclaredField(value.name).getDeclaredAnnotation(SerialName::class.java)?.value ?: value.name
-        encoder.encodeString(serialName)
-    }
-}
-
 @Serializable
 data class TransitConfig(
     val compression: CompressionMode = CompressionMode.GZIP,
 )
-
-@Serializable(with = CompressionSerializer::class)
-enum class CompressionMode {
-    @SerialName("none") NONE,
-    @SerialName("gzip") GZIP,
-}
 
 private val TOML = Toml { ignoreUnknownKeys = false }
 

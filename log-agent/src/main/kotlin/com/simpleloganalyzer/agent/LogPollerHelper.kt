@@ -4,11 +4,11 @@ import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.simpleloganalyzer.agent.config.DateConfig
 import com.simpleloganalyzer.agent.config.FilesConfig
-import com.simpleloganalyzer.agent.config.LogFormat
 import com.simpleloganalyzer.agent.config.LogPollerConfig
 import com.simpleloganalyzer.commons.logging.log
 import com.simpleloganalyzer.commons.time.SystemTickerClock
 import com.simpleloganalyzer.commons.time.TickerClock
+import com.simpleloganalyzer.ingestion.model.LogFormat
 import java.nio.file.Files
 import java.nio.file.Path
 import java.text.ParsePosition
@@ -21,13 +21,11 @@ import java.util.concurrent.TimeUnit
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
 import kotlin.io.path.useDirectoryEntries
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
 
 private const val DEFAULT_TS_FIELD = "timestamp"
 
-@OptIn(ExperimentalTime::class)
 class LogPollerHelper(
     private val clock: TickerClock = SystemTickerClock,
     private val pollerConfig: LogPollerConfig = LogPollerConfig()
