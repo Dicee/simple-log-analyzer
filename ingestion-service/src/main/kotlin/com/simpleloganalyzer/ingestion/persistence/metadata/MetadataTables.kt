@@ -4,8 +4,8 @@ import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.javatime.timestamp
 
 const val DEFAULT_NAME_MAX_LENGTH = 50
+const val LONG_STRING_MAX_LENGTH = 500
 private const val SHORT_STRING_MAX_LENGTH = 16
-private const val LONG_STRING_MAX_LENGTH = 200
 
 object LogGroups : Table("log_groups") {
     val name = varchar("name", DEFAULT_NAME_MAX_LENGTH)

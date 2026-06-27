@@ -8,9 +8,9 @@
 	- add process supervisor Mac + Linux
 - consider adding requirements specific to back-end and indexing
 - create CRUD endpoints for log metadata entities
-	- add tests for each DAO and service
 	- review the isolation mode carefully for each transaction
     - add tests for Pagination
+    - create UI for CRUD operations
 
 # Done
 - review ADR1 definition for log stream. I think I prefer supporting infinite streams, by splitting into separate files transparently.
@@ -35,3 +35,4 @@
 	- dummy index page for Angular app
 - create CRUD endpoints for log metadata entities
   - server and endpoint setup
+  - add tests for each DAO and service

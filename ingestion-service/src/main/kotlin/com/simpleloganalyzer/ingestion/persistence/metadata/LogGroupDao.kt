@@ -6,7 +6,6 @@ import com.simpleloganalyzer.ingestion.model.LogGroup
 import kotlin.time.Clock
 import kotlin.time.toJavaInstant
 import kotlin.time.toKotlinInstant
-import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.deleteWhere
@@ -15,8 +14,11 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 
-class LogGroupDao(private val db: Database, private val clock: Clock = Clock.System) {
-    fun create(name: String, description: String?, format: LogFormat, compression: CompressionMode): LogGroup = transaction(db) {
+/**
+ * Never use directly in prod, always go through [com.simpleloganalyzer.ingestion.service.LogGroupService].
+ */
+internal class LogGroupDao(private val db: MetadataDatabase, private val clock: Clock = Clock.System) {
+    fun create(name: String, format: LogFormat, compression: CompressionMode, description: String? = null): LogGroup = transaction(db.readWrite) {
         val now = clock.now()
         LogGroups.insert {
             it[LogGroups.name] = name

@@ -14,8 +14,11 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
-class LogStreamDao(private val db: Database, private val clock: Clock = Clock.System) {
-    fun create(logGroup: String, streamName: String): LogStream = transaction(db) {
+/**
+ * Never use directly in prod, always go through [com.simpleloganalyzer.ingestion.service.LogStreamService].
+ */
+internal class LogStreamDao(private val db: MetadataDatabase, private val clock: Clock = Clock.System) {
+    fun create(logGroup: String, streamName: String): LogStream = transaction(db.readWrite) {
         val now = clock.now()
         LogStreams.insert {
             it[LogStreams.logGroup] = logGroup
@@ -49,7 +52,7 @@ class LogStreamDao(private val db: Database, private val clock: Clock = Clock.Sy
     }
 
     /** Deletes only the stream row. Cascading to log files is the caller's responsibility. */
-    fun delete(logGroup: String, streamName: String): Boolean = transaction(db) {
+    fun delete(logGroup: String, streamName: String): Boolean = deleteTransaction(db) {
         LogStreams.deleteWhere { (LogStreams.logGroup eq logGroup) and (LogStreams.streamName eq streamName) } > 0
     }
 

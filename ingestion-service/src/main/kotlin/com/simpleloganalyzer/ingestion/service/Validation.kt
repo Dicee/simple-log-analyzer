@@ -13,12 +13,9 @@ internal fun validateName(value: String, fieldLabel: String) {
 
     val maxLength = DEFAULT_NAME_MAX_LENGTH
     if (value.length > maxLength) {
-        throw BadRequestException(ErrorCode.INVALID_NAME, "$fieldLabel must be at most $maxLength characters")
+        throw BadRequestException(ErrorCode.INVALID_NAME, "$fieldLabel must be at most $maxLength characters but had ${value.length}")
     }
     if (!NAME_REGEX.matches(value)) {
-        throw BadRequestException(
-            ErrorCode.INVALID_NAME,
-            "$fieldLabel must contain only letters, digits, '.', '_' or '-'",
-        )
+        throw BadRequestException(ErrorCode.INVALID_NAME, "$fieldLabel must contain only letters, digits, '.', '_' or '-' but was: $value")
     }
 }

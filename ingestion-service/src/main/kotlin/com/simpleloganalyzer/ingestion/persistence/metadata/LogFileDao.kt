@@ -5,7 +5,6 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.time.toJavaInstant
 import kotlin.time.toKotlinInstant
-import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -15,8 +14,11 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
-class LogFileDao(private val db: Database, private val clock: Clock = Clock.System) {
-    fun create(logGroup: String, logStream: String, fileName: String, firstTimestamp: Instant, lastTimestamp: Instant): LogFile = transaction(db) {
+/**
+ * Never use directly in prod, always go through [com.simpleloganalyzer.ingestion.service.LogFileService].
+ */
+internal class LogFileDao(private val db: MetadataDatabase, private val clock: Clock = Clock.System) {
+    fun create(logGroup: String, logStream: String, fileName: String, firstTimestamp: Instant, lastTimestamp: Instant): LogFile = transaction(db.readWrite) {
         val now = clock.now()
         LogFiles.insert {
             it[LogFiles.logGroup] = logGroup
@@ -30,7 +32,7 @@ class LogFileDao(private val db: Database, private val clock: Clock = Clock.Syst
         LogFile(logGroup, logStream, fileName, now, now, firstTimestamp, lastTimestamp)
     }
 
-    fun list(logGroup: String, logStream: String, pageSize: Int, minLogGroupName: String?): List<LogFile> = readTransaction(db) {
+    fun list(logGroup: String, logStream: String, pageSize: Int, minLogGroupName: String? = null): List<LogFile> = readTransaction(db) {
         LogFiles.selectAll()
             .where {
                 val base = (LogFiles.logGroup eq logGroup) and (LogFiles.logStream eq logStream)

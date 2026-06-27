@@ -2,33 +2,35 @@ package com.simpleloganalyzer.ingestion.service
 
 import com.simpleloganalyzer.ingestion.exception.BadRequestException
 import com.simpleloganalyzer.ingestion.exception.ErrorCode
+import com.simpleloganalyzer.ingestion.exception.logGroupNotFoundException
 import com.simpleloganalyzer.ingestion.model.CompressionMode
 import com.simpleloganalyzer.ingestion.model.LogFormat
 import com.simpleloganalyzer.ingestion.model.LogGroup
+import com.simpleloganalyzer.ingestion.persistence.metadata.LONG_STRING_MAX_LENGTH
 import com.simpleloganalyzer.ingestion.persistence.metadata.LogGroupDao
 import com.simpleloganalyzer.ingestion.persistence.metadata.LogStreamDao
+import com.simpleloganalyzer.ingestion.persistence.metadata.MetadataDatabase
 import com.simpleloganalyzer.ingestion.persistence.metadata.deleteTransaction
-import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
 
-class LogGroupService(
+class LogGroupService internal constructor(
     private val groupDao: LogGroupDao,
     private val streamDao: LogStreamDao,
-    private val db: Database,
+    private val db: MetadataDatabase,
 ) {
-
     fun create(name: String, description: String?, format: LogFormat, compression: CompressionMode): LogGroup {
         validateName(name, "log group name")
-        if (description != null && description.length > 500) {
+        if (description != null && description.length > LONG_STRING_MAX_LENGTH) {
             throw BadRequestException(
-                ErrorCode.BAD_REQUEST, "description must be at most 500 characters",
+                ErrorCode.BAD_REQUEST, "description must be at most $LONG_STRING_MAX_LENGTH characters",
             )
         }
         return try {
-            groupDao.create(name, description, format, compression)
-        } catch (e: SQLiteException) {
-            if (e.resultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_PRIMARYKEY) {
+            groupDao.create(name, format, compression, description)
+        } catch (e: ExposedSQLException) {
+            if (e.cause is SQLiteException && (e.cause as SQLiteException).resultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_PRIMARYKEY) {
                 throw BadRequestException(
                     ErrorCode.LOG_GROUP_ALREADY_EXISTS, "Log group '$name' already exists", e,
                 )
@@ -38,7 +40,7 @@ class LogGroupService(
     }
 
     fun get(name: String): LogGroup = groupDao.findByName(name) ?:
-        throw BadRequestException(ErrorCode.LOG_GROUP_NOT_FOUND, "Log group '$name' does not exist")
+        throw logGroupNotFoundException(name)
 
     /**
      * To be really sure that the user intended to make a deletion and that it is safe to do so, we do not cascade to
@@ -46,15 +48,8 @@ class LogGroupService(
      */
     fun delete(name: String): Unit = deleteTransaction(db) {
         if (streamDao.hasAnyInGroup(name)) {
-            throw BadRequestException(
-                ErrorCode.LOG_GROUP_NOT_EMPTY,
-                "Log group '$name' is not empty; pass force=true to delete it along with its streams",
-            )
+            throw BadRequestException(ErrorCode.LOG_GROUP_NOT_EMPTY, "Log group '$name' is not empty")
         }
-        if (!groupDao.delete(name)) {
-            throw BadRequestException(
-                ErrorCode.LOG_GROUP_NOT_FOUND, "Log group '$name' does not exist",
-            )
-        }
+        if (!groupDao.delete(name)) throw logGroupNotFoundException(name)
     }
 }

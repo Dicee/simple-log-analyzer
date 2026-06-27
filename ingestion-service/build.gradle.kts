@@ -10,7 +10,6 @@ application {
 
 dependencies {
     implementation(project(":commons"))
-
     implementation(rootProject.libs.ktor.server.core)
     implementation(rootProject.libs.ktor.server.netty)
     implementation(rootProject.libs.ktor.server.content.negotiation)
@@ -26,8 +25,11 @@ dependencies {
     implementation(rootProject.libs.exposed.java.time)
     implementation(rootProject.libs.logback.classic)
 
-    testImplementation(rootProject.libs.ktor.server.tests)
+    testImplementation(project(":test-commons"))
+    testImplementation(rootProject.libs.assertj.core)
     testImplementation(rootProject.libs.junit.jupiter)
+    testImplementation(rootProject.libs.junit.platform.launcher)
+    testImplementation(rootProject.libs.mockk)
 }
 
 tasks.test {

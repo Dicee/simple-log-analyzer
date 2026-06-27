@@ -30,3 +30,11 @@ class BadRequestException(val code: ErrorCode, message: String, cause: Throwable
 
 /** Thrown for unexpected server-side failures that should map to a 5xx response. */
 class InternalServiceFailureException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+fun logGroupNotFoundException(logGroup: String): BadRequestException = BadRequestException(
+    ErrorCode.LOG_GROUP_NOT_FOUND, "Log group '$logGroup' does not exist",
+)
+
+fun logStreamNotFoundException(groupName: String, streamName: String): BadRequestException = BadRequestException(
+    ErrorCode.LOG_STREAM_NOT_FOUND, "Log stream '$streamName' does not exist in log group '$groupName'"
+)
