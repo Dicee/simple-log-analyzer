@@ -1,20 +1,19 @@
 package com.simpleloganalyzer.ingestion.routing
 
-import com.simpleloganalyzer.commons.logging.log
 import com.simpleloganalyzer.ingestion.exception.BadRequestException
 import com.simpleloganalyzer.ingestion.exception.ErrorCode
 import com.simpleloganalyzer.ingestion.exception.InternalServiceFailureException
-import io.ktor.server.application.ApplicationCall
-import io.ktor.server.plugins.statuspages.StatusPagesConfig
-import io.ktor.server.request.httpMethod
-import io.ktor.server.request.uri
-import io.ktor.server.response.respond
-import io.ktor.server.routing.RoutingCall
-import io.ktor.server.routing.RoutingContext
-import io.ktor.http.HttpStatusCode
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
+import org.slf4j.LoggerFactory
 import kotlin.time.measureTime
-import kotlin.time.measureTimedValue
+
+private val log = LoggerFactory.getLogger("RouteHandler")
 
 @Serializable
 data class ErrorResponse(val code: ErrorCode, val message: String)
@@ -35,19 +34,19 @@ fun RoutingCall.pathParam(name: String): String =
  */
 suspend fun RoutingContext.handle(operation: String, block: suspend RoutingContext.() -> Unit) {
     log.info("[{}] {} {}", operation, call.request.httpMethod.value, call.request.uri)
-    val duration = try {
-        measureTime { block() }
+    try {
+        val duration = measureTime { block() }
+        log.info("[{}] completed in {}", operation, duration)
     } catch (e: BadRequestException) {
         log.warn("[{}] bad request: {}", operation, e.message)
         throw e
     } catch (e: InternalServiceFailureException) {
-        log.error("[{}] internal failure", operation, e)
+        log.error("[$operation] internal failure: $e", e)
         throw e
     } catch (e: Throwable) {
-        log.error("[{}] unexpected failure", operation, e)
-        throw InternalServiceFailureException("Unexpected failure in $operation", e)
+        log.error("[$operation] unexpected failure: $e", e)
+        throw InternalServiceFailureException("Unexpected failure in $operation: $e", e)
     }
-    log.info("[{}] completed in {}", operation, duration)
 }
 
 fun StatusPagesConfig.installErrorMappers() {

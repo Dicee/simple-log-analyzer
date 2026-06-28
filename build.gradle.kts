@@ -27,7 +27,7 @@ subprojects {
         }
 
         val jacocoExcludedPackages = listOf(
-            "com/simpleloganalyzer/ingestion/routing/**",
+            "com/simpleloganalyzer/ingestion/routing/routes/**",
             "com/simpleloganalyzer/ingestion/modules/**",
             "com/simpleloganalyzer/ingestion/ApplicationKt*",
         )

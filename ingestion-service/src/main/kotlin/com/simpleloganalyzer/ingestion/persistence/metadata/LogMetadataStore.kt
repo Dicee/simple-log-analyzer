@@ -20,7 +20,12 @@ object LogMetadataStore {
         val readWriteDataSource = newSqliteDataSource(dbPath, false)
         val readOnlyDataSource = newSqliteDataSource(dbPath, true)
 
-        val config = DatabaseConfig { defaultIsolationLevel = Connection.TRANSACTION_READ_COMMITTED }
+        val config = DatabaseConfig {
+            defaultIsolationLevel = Connection.TRANSACTION_READ_COMMITTED
+            // The retry logic is a bit dumb because it retries even constraint failures, which is super unlikely to be useful
+            // and causes very noisy logs. Furthermore, it's not configurable, so I prefer disabling it altogether.
+            defaultMaxAttempts = 1
+        }
         val readWriteDb = Database.connect(readWriteDataSource, databaseConfig = config)
         val readOnlyDb = Database.connect(readOnlyDataSource, databaseConfig = config)
 

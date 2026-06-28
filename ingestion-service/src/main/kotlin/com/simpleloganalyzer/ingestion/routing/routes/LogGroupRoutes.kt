@@ -1,8 +1,12 @@
-package com.simpleloganalyzer.ingestion.routing
+package com.simpleloganalyzer.ingestion.routing.routes
 
 import com.simpleloganalyzer.ingestion.model.CompressionMode
 import com.simpleloganalyzer.ingestion.model.LogFormat
 import com.simpleloganalyzer.ingestion.persistence.metadata.LogGroupDao
+import com.simpleloganalyzer.ingestion.routing.handle
+import com.simpleloganalyzer.ingestion.routing.pageRequest
+import com.simpleloganalyzer.ingestion.routing.pathParam
+import com.simpleloganalyzer.ingestion.routing.toPage
 import com.simpleloganalyzer.ingestion.service.LogGroupService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive

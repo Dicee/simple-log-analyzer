@@ -1,4 +1,4 @@
-package com.simpleloganalyzer.ingestion.routing
+package com.simpleloganalyzer.ingestion.routing.routes
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application

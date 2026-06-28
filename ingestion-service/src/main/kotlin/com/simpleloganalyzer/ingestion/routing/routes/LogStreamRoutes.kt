@@ -1,5 +1,9 @@
-package com.simpleloganalyzer.ingestion.routing
+package com.simpleloganalyzer.ingestion.routing.routes
 
+import com.simpleloganalyzer.ingestion.routing.handle
+import com.simpleloganalyzer.ingestion.routing.pageRequest
+import com.simpleloganalyzer.ingestion.routing.pathParam
+import com.simpleloganalyzer.ingestion.routing.toPage
 import com.simpleloganalyzer.ingestion.service.LogStreamService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive

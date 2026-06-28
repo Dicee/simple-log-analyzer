@@ -2,10 +2,10 @@ package com.simpleloganalyzer.ingestion
 
 import com.simpleloganalyzer.ingestion.modules.ingestionModule
 import com.simpleloganalyzer.ingestion.routing.installErrorMappers
-import com.simpleloganalyzer.ingestion.routing.logFileRoutes
-import com.simpleloganalyzer.ingestion.routing.logGroupRoutes
-import com.simpleloganalyzer.ingestion.routing.logStreamRoutes
-import com.simpleloganalyzer.ingestion.routing.registerIngestionRoutes
+import com.simpleloganalyzer.ingestion.routing.routes.logFileRoutes
+import com.simpleloganalyzer.ingestion.routing.routes.logGroupRoutes
+import com.simpleloganalyzer.ingestion.routing.routes.logStreamRoutes
+import com.simpleloganalyzer.ingestion.routing.routes.registerIngestionRoutes
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install

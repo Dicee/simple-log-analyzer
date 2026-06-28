@@ -1,4 +1,9 @@
+@file:UseSerializers(InstantIsoSerializer::class)
+
 package com.simpleloganalyzer.ingestion.model
+
+import com.simpleloganalyzer.commons.serialization.InstantIsoSerializer
+import kotlinx.serialization.UseSerializers
 
 import com.simpleloganalyzer.commons.serialization.EnumSerializer
 import kotlinx.serialization.SerialName
