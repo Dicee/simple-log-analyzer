@@ -1,0 +1,425 @@
+openapi: 3.1.0
+info:
+  title: Simple Log Analyzer API
+  version: 0.1.0
+  description: Ingestion service API for the simple log analyzer
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+components:
+  schemas:
+    LogFormat:
+      type: string
+      enum: [plain-text, json, logfmt]
+
+    CompressionMode:
+      type: string
+      enum: [none, gzip]
+
+    ErrorCode:
+      type: string
+      enum:
+        - BAD_REQUEST
+        - INVALID_NAME
+        - LOG_GROUP_ALREADY_EXISTS
+        - LOG_GROUP_NOT_FOUND
+        - LOG_GROUP_NOT_EMPTY
+        - LOG_STREAM_ALREADY_EXISTS
+        - LOG_STREAM_NOT_FOUND
+        - LOG_FILE_ALREADY_EXISTS
+        - INTERNAL_FAILURE
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+
+    LogGroup:
+      type: object
+      required: [name, creationDate, format, compression]
+      properties:
+        name:
+          type: string
+        description:
+          type: [string, "null"]
+        creationDate:
+          type: string
+          format: date-time
+        format:
+          $ref: '#/components/schemas/LogFormat'
+        compression:
+          $ref: '#/components/schemas/CompressionMode'
+
+    LogStream:
+      type: object
+      required: [logGroup, streamName, creationDate]
+      properties:
+        logGroup:
+          type: string
+        streamName:
+          type: string
+        creationDate:
+          type: string
+          format: date-time
+
+    LogFile:
+      type: object
+      required: [logGroup, logStream, fileName, creationDate, lastModifiedDate, firstTimestamp, lastTimestamp]
+      properties:
+        logGroup:
+          type: string
+        logStream:
+          type: string
+        fileName:
+          type: string
+        creationDate:
+          type: string
+          format: date-time
+        lastModifiedDate:
+          type: string
+          format: date-time
+        firstTimestamp:
+          type: string
+          format: date-time
+        lastTimestamp:
+          type: string
+          format: date-time
+
+    CreateLogGroupRequest:
+      type: object
+      required: [name, format]
+      properties:
+        name:
+          type: string
+        format:
+          $ref: '#/components/schemas/LogFormat'
+        description:
+          type: [string, "null"]
+        compression:
+          $ref: '#/components/schemas/CompressionMode'
+
+    CreateLogStreamRequest:
+      type: object
+      required: [streamName]
+      properties:
+        streamName:
+          type: string
+
+    CreateLogFileRequest:
+      type: object
+      required: [fileName, firstTimestamp, lastTimestamp]
+      properties:
+        fileName:
+          type: string
+        firstTimestamp:
+          type: string
+          format: date-time
+        lastTimestamp:
+          type: string
+          format: date-time
+
+    LogGroupPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogGroup'
+        nextPageToken:
+          type: [string, "null"]
+
+    LogStreamPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogStream'
+        nextPageToken:
+          type: [string, "null"]
+
+    LogFilePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogFile'
+        nextPageToken:
+          type: [string, "null"]
+
+  parameters:
+    pageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 50
+    pageToken:
+      name: pageToken
+      in: query
+      schema:
+        type: string
+    groupName:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+    groupParam:
+      name: group
+      in: path
+      required: true
+      schema:
+        type: string
+    streamParam:
+      name: stream
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+paths:
+  /health:
+    get:
+      operationId: health
+      summary: Health check
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /v1/log-groups:
+    post:
+      operationId: createLogGroup
+      summary: Create a log group
+      tags: [LogGroups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLogGroupRequest'
+      responses:
+        '201':
+          description: Log group created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogGroup'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      operationId: listLogGroups
+      summary: List log groups
+      tags: [LogGroups]
+      parameters:
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/pageToken'
+      responses:
+        '200':
+          description: Paginated list of log groups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogGroupPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/log-groups/{name}:
+    parameters:
+      - $ref: '#/components/parameters/groupName'
+    get:
+      operationId: getLogGroup
+      summary: Get a log group by name
+      tags: [LogGroups]
+      responses:
+        '200':
+          description: Log group found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogGroup'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteLogGroup
+      summary: Delete a log group
+      tags: [LogGroups]
+      responses:
+        '204':
+          description: Log group deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/log-groups/{group}/streams:
+    parameters:
+      - $ref: '#/components/parameters/groupParam'
+    post:
+      operationId: createLogStream
+      summary: Create a log stream in a log group
+      tags: [LogStreams]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLogStreamRequest'
+      responses:
+        '201':
+          description: Log stream created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogStream'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      operationId: listLogStreams
+      summary: List log streams in a log group
+      tags: [LogStreams]
+      parameters:
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/pageToken'
+      responses:
+        '200':
+          description: Paginated list of log streams
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogStreamPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/log-groups/{group}/streams/{stream}:
+    parameters:
+      - $ref: '#/components/parameters/groupParam'
+      - $ref: '#/components/parameters/streamParam'
+    delete:
+      operationId: deleteLogStream
+      summary: Delete a log stream and all its files
+      tags: [LogStreams]
+      responses:
+        '204':
+          description: Log stream deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/log-groups/{group}/streams/{stream}/files:
+    parameters:
+      - $ref: '#/components/parameters/groupParam'
+      - $ref: '#/components/parameters/streamParam'
+    post:
+      operationId: createLogFile
+      summary: Register a log file in a stream
+      tags: [LogFiles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLogFileRequest'
+      responses:
+        '201':
+          description: Log file registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogFile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      operationId: listLogFiles
+      summary: List log files in a stream
+      tags: [LogFiles]
+      parameters:
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/pageToken'
+      responses:
+        '200':
+          description: Paginated list of log files
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogFilePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/logs:
+    put:
+      operationId: putLogs
+      summary: Ingest a batch of raw log data
+      tags: [Ingestion]
+      responses:
+        '501':
+          description: Not yet implemented

@@ -5,11 +5,12 @@
 - when adding metrics, make sure we are ok with delivery semantics (should probably be able to switch from at-least-once to at-most-once ; unfortunately I think exactly-once will be too complicated in edge cases)
 - log poller implementation
 	- add process supervisor Mac + Linux
+	- integrate with the real log ingestion API
 - consider adding requirements specific to back-end and indexing
 - create CRUD endpoints for log metadata entities
 	- review the isolation mode carefully for each transaction
     - create UI for CRUD operations
-
+	- add support for extractor configuration
 # Done
 - review ADR1 definition for log stream. I think I prefer supporting infinite streams, by splitting into separate files transparently.
 - parse config in CLI

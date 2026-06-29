@@ -141,11 +141,21 @@ This is discussed in more depth in [ADR2](adr2-initial-ingestion-layer.md). It c
 ## Technical stack
 
 In this section, we will go through the tech stack and the organization of the build. It is important to note that here, technology choices are very much driven by our learning objectives, and wouldn't necessarily make sense, or be the best, in a real production project. The main technologies we will use are the following:
+
+### Back-end
+
 - Kotlin will be used for the log ingestion service (Ktor server) as well as the log agent interfacing with the ingestion service. Ktor is a pretty adequate choice because it is intrinsically asynchronous (using coroutines), which is often a good choice for use cases where IO and network are big contributors to the latency.
-- Angular will be used for the front-end. It might be overkill for a simple app, but I wanted to have a personal project in Angular since I recently started using Angular at work.
-- Docker Compose will be used to encapsulate the front-end and back-end, and allow running them together as a unit in a container. This setup is appropriate enough for a dev tool (I intend to use the tool for my local debugging).
 - SQLite will be used as an embedded relational store for metadata (log groups, log streams, log files). It requires no separate server process and its file format is portable, making it a natural fit for a local developer tool. [Exposed](https://www.jetbrains.com/exposed/) will be used as the SQL DSL layer, as it is idiomatic Kotlin and integrates cleanly with SQLite via the xerial JDBC driver.
+- OpenAPI 3.0 will be used to generate the HTTP client for our Ktor server both in Kotlin (with suspendable methods!) and Typescript
 - For testing, we'll mainly use, JUnit5, MockK, AssertJ (I love its syntax and rich feature set). We will also have to use either Kotest or Turbine (to be experimented with) for coroutine testing.
+
+### Front-end
+- Angular will be used for the front-end. It might be overkill for a simple app, but I wanted to have a personal project in Angular since I recently started using Angular at work.
+- We'll use Angular Material for common components, as it's simple and broadly used and I want a simple front-end that focuses on building components specific to my use cases
+- We'll leverage Apache Echarts for data charts, as it has a broad range of scalable chart components that will more than cover our needs.
+
+### Other
+- Docker Compose will be used to encapsulate the front-end and back-end, and allow running them together as a unit in a container. This setup is appropriate enough for a dev tool (I intend to use the tool for my local debugging).
 
 ### Target system
 

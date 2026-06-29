@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "2.2.0" apply false
+    id("org.openapi.generator") version "7.23.0" apply false
 }
 
 allprojects {

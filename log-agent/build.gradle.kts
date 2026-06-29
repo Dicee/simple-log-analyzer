@@ -3,6 +3,7 @@ plugins {
     kotlin("plugin.serialization") version "2.2.0"
     application
     distribution
+    id("org.openapi.generator")
 }
 
 application {
@@ -10,8 +11,40 @@ application {
     applicationName = "log-agent"
 }
 
+val openApiOutputDir = layout.buildDirectory.dir("generated/openapi")
+
+openApiGenerate {
+    generatorName.set("kotlin")
+    library.set("jvm-ktor")
+    inputSpec.set("${rootProject.projectDir}/openapi/api.yaml")
+    outputDir.set(openApiOutputDir.get().asFile.absolutePath)
+    apiPackage.set("com.simpleloganalyzer.agent.client.api")
+    modelPackage.set("com.simpleloganalyzer.agent.client.model")
+    configOptions.set(mapOf(
+        "serializationLibrary" to "kotlinx_serialization",
+        // dates are ISO-8601 strings; convert to kotlin.time.Instant at the call site
+        "dateLibrary" to "string",
+    ))
+}
+
+kotlin {
+    sourceSets {
+        main {
+            kotlin.srcDir(openApiOutputDir.map { it.dir("src/main/kotlin") })
+        }
+    }
+}
+
+tasks.compileKotlin {
+    dependsOn(tasks.openApiGenerate)
+}
+
 dependencies {
     implementation(rootProject.libs.kotlinx.coroutines.core)
+    implementation(rootProject.libs.ktor.client.core)
+    implementation(rootProject.libs.ktor.client.cio)
+    implementation(rootProject.libs.ktor.client.content.negotiation)
+    implementation(rootProject.libs.ktor.serialization.json)
     implementation(rootProject.libs.caffeine)
     implementation(rootProject.libs.kotlinx.serialization.json)
     implementation(rootProject.libs.logback.classic)
