@@ -1,0 +1,16 @@
+export * from './health.service';
+import { HealthService } from './health.service';
+export * from './health.serviceInterface';
+export * from './ingestion.service';
+import { IngestionService } from './ingestion.service';
+export * from './ingestion.serviceInterface';
+export * from './logFiles.service';
+import { LogFilesService } from './logFiles.service';
+export * from './logFiles.serviceInterface';
+export * from './logGroups.service';
+import { LogGroupsService } from './logGroups.service';
+export * from './logGroups.serviceInterface';
+export * from './logStreams.service';
+import { LogStreamsService } from './logStreams.service';
+export * from './logStreams.serviceInterface';
+export const APIS = [HealthService, IngestionService, LogFilesService, LogGroupsService, LogStreamsService];
