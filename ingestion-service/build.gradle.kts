@@ -11,6 +11,7 @@ application {
 dependencies {
     implementation(project(":commons"))
     implementation(rootProject.libs.ktor.server.core)
+    implementation(rootProject.libs.ktor.server.cors)
     implementation(rootProject.libs.ktor.server.netty)
     implementation(rootProject.libs.ktor.server.content.negotiation)
     implementation(rootProject.libs.ktor.serialization.json)
